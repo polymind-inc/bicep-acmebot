@@ -475,23 +475,34 @@ param exportApiKey bool = false
 @description('Optional. Enable or disable telemetry for referenced published AVM modules. This module does not deploy its own AVM telemetry deployment.')
 param enableTelemetry bool = false
 
-var normalizedFunctionName = toLower(name)
+var functionAppName = name
+var resourceTags = tags
+var subscriptionId = subscription().subscriptionId
+var resourceGroupName = resourceGroup().name
+var subscriptionRootResourceId = subscription().id
+
+var functionPublicNetworkAccess = publicNetworkAccess ?? 'Disabled'
+var storagePublicNetworkAccess = storageAccount.?publicNetworkAccess ?? 'Disabled'
+
+var siteConfigIpRestrictionDefaultAction = siteConfig.?ipSecurityRestrictionsDefaultAction ?? 'Deny'
+var siteConfigScmIpRestrictionDefaultAction = siteConfig.?scmIpSecurityRestrictionsDefaultAction ?? 'Deny'
+var siteConfigScmUseMainIpRestriction = siteConfig.?scmIpSecurityRestrictionsUseMain ?? true
+var siteConfigVnetRouteAllEnabled = siteConfig.?vnetRouteAllEnabled ?? (virtualNetworkSubnetId != null)
+
+var normalizedFunctionName = toLower(functionAppName)
 var sanitizedFunctionName = replace(replace(replace(normalizedFunctionName, '-', ''), '_', ''), '.', '')
 var sanitizedContainerName = replace(replace(normalizedFunctionName, '_', '-'), '.', '-')
-var uniqueToken = uniqueString(resourceGroup().id, name)
+var uniqueToken = uniqueString(subscriptionId, resourceGroupName, functionAppName)
 
-var storageAccountName = storageAccount.?name ?? take('st${take(sanitizedFunctionName, 9)}${uniqueToken}', 24)
-var deploymentContainerName = deploymentContainer.?name ?? take(
-  'app-package-${sanitizedContainerName}-${take(uniqueToken, 7)}',
-  63
-)
-var servicePlanName = servicePlan.?name ?? 'asp-${name}'
-var logAnalyticsWorkspaceName = logAnalyticsWorkspace.?name ?? 'log-${name}'
-var applicationInsightsName = applicationInsights.?name ?? 'appi-${name}'
+var storageAccountName = storageAccount.?name ?? 'st${take(sanitizedFunctionName, 16)}${take(uniqueToken, 6)}'
+var deploymentContainerName = deploymentContainer.?name ?? 'app-package-${take(sanitizedContainerName, 43)}-${take(uniqueToken, 7)}'
+var servicePlanName = servicePlan.?name ?? 'asp-${functionAppName}'
+var logAnalyticsWorkspaceName = logAnalyticsWorkspace.?name ?? 'log-${functionAppName}'
+var applicationInsightsName = applicationInsights.?name ?? 'appi-${functionAppName}'
 var logAnalyticsWorkspaceResourceIdInput = logAnalyticsWorkspace.?resourceId ?? ''
 var applicationInsightsResourceIdInput = applicationInsights.?resourceId ?? ''
 var existingApplicationInsightsResourceIdParts = split(applicationInsightsResourceIdInput, '/')
-var functionAppResourceId = resourceId('Microsoft.Web/sites', name)
+var functionAppResourceId = resourceId('Microsoft.Web/sites', functionAppName)
 var servicePlanResourceId = resourceId('Microsoft.Web/serverfarms', servicePlanName)
 var logAnalyticsWorkspaceResourceId = resourceId('Microsoft.OperationalInsights/workspaces', logAnalyticsWorkspaceName)
 var applicationInsightsResourceId = resourceId('Microsoft.Insights/components', applicationInsightsName)
@@ -543,14 +554,16 @@ var webhookUrl = acmebot.?webhookUrl ?? null
 var preferredChain = acmebot.?preferredChain ?? null
 var preferredProfile = acmebot.?preferredProfile ?? null
 var acmebotManagedIdentityClientId = acmebot.?managedIdentityClientId ?? null
+var acmebotEnvironment = acmebot.?environment ?? 'AzureCloud'
+var acmebotUseSystemNameServer = acmebot.?useSystemNameServer ?? (virtualNetworkSubnetId != null || acmebotEnvironment != 'AzureCloud')
 
 var acmebotCommonAppSettings = {
   Acmebot__Contacts: acmebot.mailAddress
   Acmebot__Endpoint: acmebot.?acmeEndpoint ?? 'https://acme-v02.api.letsencrypt.org/directory'
   Acmebot__VaultBaseUrl: acmebot.vaultUri
-  Acmebot__Environment: acmebot.?environment ?? 'AzureCloud'
+  Acmebot__Environment: acmebotEnvironment
   Acmebot__RenewBeforeExpiry: string(acmebot.?renewBeforeExpiry ?? 30)
-  Acmebot__UseSystemNameServer: string(acmebot.?useSystemNameServer ?? false)
+  Acmebot__UseSystemNameServer: string(acmebotUseSystemNameServer)
   Acmebot__AppRoleRequired: string(acmebot.?appRoleRequired ?? false)
 }
 
@@ -681,9 +694,9 @@ var acmebotAppSettings = union(
       }
 )
 
-var authEnabled = (authSettings != null) && authSettings!.enabled
+var authConfigured = authSettings != null
 
-var authAppSettings = !authEnabled
+var authAppSettings = !authConfigured
   ? {}
   : {
       MICROSOFT_PROVIDER_AUTHENTICATION_SECRET: authSettings!.activeDirectory.clientSecret
@@ -776,8 +789,6 @@ var storageTableServices = union(
   storageAccount.?tableServices ?? {}
 )
 
-var storagePublicNetworkAccess = storageAccount.?publicNetworkAccess ?? 'Disabled'
-var functionPublicNetworkAccess = publicNetworkAccess ?? 'Disabled'
 var storageAccountReplication = storageAccount.?accountReplicationType ?? 'LRS'
 var storageAccountDefaultSkuName = storageAccountReplication == 'GRS'
   ? 'Standard_GRS'
@@ -790,54 +801,61 @@ var storageAccountDefaultSkuName = storageAccountReplication == 'GRS'
               : (storageAccountReplication == 'RAGZRS' ? 'Standard_RAGZRS' : 'Standard_LRS'))))
 var storageAccountSkuName = storageAccount.?skuName ?? storageAccountDefaultSkuName
 
-var appSiteConfig = union(
+var functionAppSiteConfig = union(
   {
     minTlsVersion: '1.2'
     scmMinTlsVersion: '1.2'
     ftpsState: 'Disabled'
-    scmIpSecurityRestrictionsUseMain: true
-    vnetRouteAllEnabled: virtualNetworkSubnetId != null
-    ipSecurityRestrictionsDefaultAction: 'Deny'
-    scmIpSecurityRestrictionsDefaultAction: 'Deny'
+    scmIpSecurityRestrictionsUseMain: siteConfigScmUseMainIpRestriction
+    vnetRouteAllEnabled: siteConfigVnetRouteAllEnabled
+    ipSecurityRestrictionsDefaultAction: siteConfigIpRestrictionDefaultAction
+    scmIpSecurityRestrictionsDefaultAction: siteConfigScmIpRestrictionDefaultAction
   },
   siteConfig
 )
 
-var storageBlobEndpoint = 'https://${storageAccountName}.blob.${environment().suffixes.storage}'
-var storageQueueEndpoint = 'https://${storageAccountName}.queue.${environment().suffixes.storage}'
-var storageTableEndpoint = 'https://${storageAccountName}.table.${environment().suffixes.storage}'
+var storagePrimaryEndpoints = storage.outputs.serviceEndpoints
+var storageContainerEndpointUrl = '${storagePrimaryEndpoints.blob}${deploymentContainerName}'
 
 var systemAssignedEnabled = managedIdentities.?systemAssigned ?? true
 var storageUserAssignedIdentityResourceId = storageManagedIdentity.?userAssignedResourceId ?? ''
-var hasStorageUserAssignedIdentity = !empty(storageUserAssignedIdentityResourceId)
+var storageUsesUserAssignedIdentity = !empty(storageUserAssignedIdentityResourceId)
+var storageAuthenticationType = storageUsesUserAssignedIdentity ? 'UserAssignedIdentity' : 'SystemAssignedIdentity'
+var storageIdentityConfigured = storageUsesUserAssignedIdentity || systemAssignedEnabled
 
-// Storage access uses SA-MI by default. If storageManagedIdentity is configured,
-// that attached UA-MI is used instead for AzureWebJobsStorage and deployment storage.
-var storageUsesUserAssigned = hasStorageUserAssignedIdentity
-var storageUsesSystemAssigned = !storageUsesUserAssigned && systemAssignedEnabled
-var storageIdentityConfigured = storageUsesSystemAssigned || storageUsesUserAssigned
+var storageManagedIdentityClientId = storageUsesUserAssignedIdentity ? uamiLookup!.outputs.clientId : ''
+var storageManagedIdentityPrincipalId = storageUsesUserAssignedIdentity
+  ? uamiLookup!.outputs.principalId
+  : (site.outputs.?systemAssignedMIPrincipalId ?? '')
 
-var azureWebJobsStorageMiSettings = storageUsesUserAssigned
+var azureWebJobsStorageIdentityAppSettings = union(
+  {
+    AzureWebJobsStorage__credential: 'managedidentity'
+    AzureWebJobsStorage__blobServiceUri: storagePrimaryEndpoints.blob
+    AzureWebJobsStorage__queueServiceUri: storagePrimaryEndpoints.queue
+    AzureWebJobsStorage__tableServiceUri: storagePrimaryEndpoints.table
+  },
+  storageUsesUserAssignedIdentity
   ? {
-      AzureWebJobsStorage__credential: 'managedidentity'
-      AzureWebJobsStorage__clientId: uamiLookup!.outputs.clientId
+      AzureWebJobsStorage__clientId: storageManagedIdentityClientId
     }
   : {}
+)
 
-var deploymentStorageAuthentication = storageUsesUserAssigned
+var deploymentStorageAuthentication = storageUsesUserAssignedIdentity
   ? {
-      type: 'UserAssignedIdentity'
+      type: storageAuthenticationType
       userAssignedIdentityResourceId: storageUserAssignedIdentityResourceId
     }
   : {
-      type: 'SystemAssignedIdentity'
+      type: storageAuthenticationType
     }
 
 var flexFunctionConfig = {
   deployment: {
     storage: {
       type: 'blobContainer'
-      value: '${storageBlobEndpoint}/${deploymentContainerName}'
+      value: storageContainerEndpointUrl
       authentication: deploymentStorageAuthentication
     }
   }
@@ -851,113 +869,59 @@ var flexFunctionConfig = {
   }
 }
 
-var appSettings = union(
+var functionAppSettings = union(
   additionalAppSettings,
   {
-    AzureWebJobsStorage__blobServiceUri: storageBlobEndpoint
-    AzureWebJobsStorage__queueServiceUri: storageQueueEndpoint
-    AzureWebJobsStorage__tableServiceUri: storageTableEndpoint
-    AzureWebJobsStorage__credential: 'managedidentity'
     APPLICATIONINSIGHTS_CONNECTION_STRING: applicationInsightsConnectionString
     APPINSIGHTS_INSTRUMENTATIONKEY: applicationInsightsInstrumentationKey
   },
-  azureWebJobsStorageMiSettings,
+  azureWebJobsStorageIdentityAppSettings,
   acmebotAppSettings,
   authAppSettings
 )
 
-var authConfig = !authEnabled
-  ? []
-  : [
-      {
-        name: 'authsettingsV2'
-        properties: {
-          platform: {
+var authSettingsV2 = !authConfigured
+  ? null
+  : {
+      name: 'authsettingsV2'
+      properties: {
+        platform: {
+          enabled: authSettings!.enabled
+          runtimeVersion: '~1'
+        }
+        globalValidation: {
+          requireAuthentication: authSettings!.enabled
+          unauthenticatedClientAction: 'RedirectToLoginPage'
+        }
+        identityProviders: {
+          azureActiveDirectory: {
             enabled: true
-            runtimeVersion: '~1'
-          }
-          globalValidation: {
-            requireAuthentication: true
-            unauthenticatedClientAction: 'RedirectToLoginPage'
-          }
-          identityProviders: {
-            azureActiveDirectory: {
-              enabled: true
-              registration: {
-                clientId: authSettings!.activeDirectory.clientId
-                clientSecretSettingName: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
-                openIdIssuer: authSettings!.activeDirectory.tenantAuthEndpoint
-              }
-            }
-          }
-          login: {
-            tokenStore: {
-              enabled: false
+            registration: {
+              clientId: authSettings!.activeDirectory.clientId
+              clientSecretSettingName: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
+              openIdIssuer: authSettings!.activeDirectory.tenantAuthEndpoint
             }
           }
         }
+        login: {
+          tokenStore: {
+            enabled: false
+          }
+        }
       }
-    ]
+    }
 
-var appConfigs = concat(
+var functionAppConfigs = concat(
   [
     {
       name: 'appsettings'
       retainCurrentAppSettings: false
-      properties: appSettings
+      properties: functionAppSettings
     }
   ],
-  authConfig,
+  authSettingsV2 == null ? [] : [authSettingsV2],
   configs
 )
-
-module servicePlanModule 'br/public:avm/res/web/serverfarm:0.7.0' = {
-  name: servicePlanDeploymentName
-  params: {
-    name: servicePlanName
-    location: location
-    kind: servicePlan.?kind ?? 'functionapp'
-    reserved: true
-    skuName: servicePlan.?skuName ?? 'FC1'
-    zoneRedundant: servicePlan.?zoneRedundant ?? false
-    tags: servicePlan.?tags ?? tags
-    enableTelemetry: enableTelemetry
-  }
-}
-
-module workspace 'br/public:avm/res/operational-insights/workspace:0.15.1' = if (createLogAnalyticsWorkspace) {
-  name: logAnalyticsWorkspaceDeploymentName
-  params: {
-    name: logAnalyticsWorkspaceName
-    location: location
-    dataRetention: logAnalyticsWorkspace.?retentionInDays ?? 30
-    tags: logAnalyticsWorkspace.?tags ?? tags
-    enableTelemetry: enableTelemetry
-  }
-}
-
-module insights 'br/public:avm/res/insights/component:0.7.1' = if (createApplicationInsights) {
-  name: applicationInsightsDeploymentName
-  params: {
-    name: applicationInsightsName
-    location: location
-    workspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
-    applicationType: 'web'
-    tags: applicationInsights.?tags ?? tags
-    enableTelemetry: enableTelemetry
-  }
-}
-
-module uamiLookup 'modules/uami-lookup.bicep' = if (storageUsesUserAssigned) {
-  name: take('avm-${uniqueString(storageUserAssignedIdentityResourceId, location)}-uami', 64)
-  scope: resourceGroup(
-    split(storageUserAssignedIdentityResourceId, '/')[2],
-    split(storageUserAssignedIdentityResourceId, '/')[4]
-  )
-  params: {
-    name: last(split(storageUserAssignedIdentityResourceId, '/'))
-  }
-}
 
 module storage 'br/public:avm/res/storage/storage-account:0.32.0' = {
   name: storageAccountDeploymentName
@@ -979,31 +943,44 @@ module storage 'br/public:avm/res/storage/storage-account:0.32.0' = {
     privateEndpoints: storageAccountPrivateEndpoints
     networkAcls: storageAccount.?networkAcls
     lock: lock
-    tags: storageAccount.?tags ?? tags
+    tags: storageAccount.?tags ?? resourceTags
     enableTelemetry: enableTelemetry
   }
 }
 
-module site 'br/public:avm/res/web/site:0.23.0' = {
-  name: functionAppDeploymentName
+module serverfarm 'br/public:avm/res/web/serverfarm:0.7.0' = {
+  name: servicePlanDeploymentName
   params: {
-    name: name
+    name: servicePlanName
     location: location
-    kind: 'functionapp,linux'
-    serverFarmResourceId: servicePlanModule.outputs.resourceId
+    kind: servicePlan.?kind ?? 'functionapp'
     reserved: true
-    httpsOnly: true
-    publicNetworkAccess: functionPublicNetworkAccess
-    virtualNetworkSubnetResourceId: virtualNetworkSubnetId
-    managedIdentities: managedIdentities
-    siteConfig: appSiteConfig
-    functionAppConfig: flexFunctionConfig
-    configs: appConfigs
-    diagnosticSettings: functionDiagnosticSettings
-    privateEndpoints: privateEndpoints
-    roleAssignments: roleAssignments
-    lock: lock
-    tags: tags
+    skuName: servicePlan.?skuName ?? 'FC1'
+    zoneRedundant: servicePlan.?zoneRedundant ?? false
+    tags: servicePlan.?tags ?? resourceTags
+    enableTelemetry: enableTelemetry
+  }
+}
+
+module workspace 'br/public:avm/res/operational-insights/workspace:0.15.1' = if (createLogAnalyticsWorkspace) {
+  name: logAnalyticsWorkspaceDeploymentName
+  params: {
+    name: logAnalyticsWorkspaceName
+    location: location
+    dataRetention: logAnalyticsWorkspace.?retentionInDays ?? 30
+    tags: logAnalyticsWorkspace.?tags ?? resourceTags
+    enableTelemetry: enableTelemetry
+  }
+}
+
+module insights 'br/public:avm/res/insights/component:0.7.1' = if (createApplicationInsights) {
+  name: applicationInsightsDeploymentName
+  params: {
+    name: applicationInsightsName
+    location: location
+    workspaceResourceId: effectiveLogAnalyticsWorkspaceResourceId
+    applicationType: 'web'
+    tags: applicationInsights.?tags ?? resourceTags
     enableTelemetry: enableTelemetry
   }
 }
@@ -1013,37 +990,71 @@ resource existingApplicationInsights 'Microsoft.Insights/components@2020-02-02' 
   name: last(existingApplicationInsightsResourceIdParts)
 }
 
+module site 'br/public:avm/res/web/site:0.23.0' = {
+  name: functionAppDeploymentName
+  params: {
+    name: functionAppName
+    location: location
+    kind: 'functionapp,linux'
+    serverFarmResourceId: serverfarm.outputs.resourceId
+    reserved: true
+    httpsOnly: true
+    publicNetworkAccess: functionPublicNetworkAccess
+    virtualNetworkSubnetResourceId: virtualNetworkSubnetId
+    managedIdentities: managedIdentities
+    siteConfig: functionAppSiteConfig
+    functionAppConfig: flexFunctionConfig
+    configs: functionAppConfigs
+    diagnosticSettings: functionDiagnosticSettings
+    privateEndpoints: privateEndpoints
+    roleAssignments: roleAssignments
+    lock: lock
+    tags: resourceTags
+    enableTelemetry: enableTelemetry
+  }
+}
+
+module uamiLookup 'modules/uami-lookup.bicep' = if (storageUsesUserAssignedIdentity) {
+  name: take('avm-${uniqueString(storageUserAssignedIdentityResourceId, location)}-uami', 64)
+  scope: resourceGroup(
+    split(storageUserAssignedIdentityResourceId, '/')[2],
+    split(storageUserAssignedIdentityResourceId, '/')[4]
+  )
+  params: {
+    name: last(split(storageUserAssignedIdentityResourceId, '/'))
+  }
+}
+
 resource functionApp 'Microsoft.Web/sites@2025-03-01' existing = {
-  name: name
+  name: functionAppName
 }
 
 resource storageAccountRef 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
   name: storageAccountName
 }
 
-// Storage Blob Data Owner, Storage Queue Data Contributor, Storage Table Data Contributor, Storage Account Contributor.
-// Required for identity-based AzureWebJobsStorage and deployment storage access on Flex Consumption.
-var storageRoleDefinitionIds = [
-  'b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
-  '974c5e8b-45b9-4653-ba55-5f855dd0fb88'
-  '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
-  '17d1049b-9a84-46fb-8f53-869881c3d3ab'
-]
-
-var storagePrincipalId = storageUsesSystemAssigned
-  ? (site.outputs.?systemAssignedMIPrincipalId ?? '')
-  : (storageUsesUserAssigned ? uamiLookup!.outputs.principalId : '')
+var storageRoleDefinitionIds = {
+  storageBlobDataOwner: '${subscriptionRootResourceId}/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
+  storageQueueDataContributor: '${subscriptionRootResourceId}/providers/Microsoft.Authorization/roleDefinitions/974c5e8b-45b9-4653-ba55-5f855dd0fb88'
+  storageTableDataContributor: '${subscriptionRootResourceId}/providers/Microsoft.Authorization/roleDefinitions/0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
+}
 
 resource siteStorageRoleAssignments 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
-  for roleDefId in storageRoleDefinitionIds: if (storageIdentityConfigured) {
+  for roleDefinition in items(storageRoleDefinitionIds): if (storageIdentityConfigured) {
     scope: storageAccountRef
-    name: guid(storageAccountRef.id, name, roleDefId)
+    name: guid(
+      storageAccountRef.id,
+      roleDefinition.key,
+      storageUsesUserAssignedIdentity ? storageUserAssignedIdentityResourceId : functionAppName
+    )
     properties: {
-      principalId: storagePrincipalId
-      roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleDefId)
+      principalId: storageManagedIdentityPrincipalId
+      roleDefinitionId: roleDefinition.value
       principalType: 'ServicePrincipal'
     }
     dependsOn: [
+      // The scope is an existing-resource symbol, so keep the module dependency explicit.
+      #disable-next-line no-unnecessary-dependson
       storage
     ]
   }
