@@ -1,15 +1,18 @@
 targetScope = 'resourceGroup'
 
-metadata name = 'Using public quickstart parameters'
-metadata description = 'This instance deploys Azure Acmebot with the default supporting resources, public network access, and an Azure DNS provider configuration.'
+metadata name = 'Using a user-assigned managed identity only'
+metadata description = 'This instance deploys Azure Acmebot bound to a pre-existing user-assigned managed identity (no system-assigned identity).'
 
 @description('Optional. Azure region to create resources. Defaults to the resource group location.')
 param location string = resourceGroup().location
 
+@description('Required. The resource ID of a pre-existing user-assigned managed identity to bind to the Function App.')
+param userAssignedIdentityResourceId string
+
 var functionAppName = take('func-acmebot-${uniqueString(resourceGroup().id, deployment().name)}', 32)
 
 module testDeployment '../../../main.bicep' = {
-  name: take('avm-${uniqueString(resourceId('Microsoft.Web/sites', functionAppName), location)}-defaults', 64)
+  name: take('avm-${uniqueString(resourceId('Microsoft.Web/sites', functionAppName), location)}-uami', 64)
   params: {
     name: functionAppName
     location: location
@@ -22,15 +25,16 @@ module testDeployment '../../../main.bicep' = {
           subscriptionId: subscription().subscriptionId
         }
       }
+      managedIdentityClientId: ''
     }
-    publicNetworkAccess: 'Enabled'
-    storageAccount: {
-      publicNetworkAccess: 'Enabled'
+    managedIdentities: {
+      systemAssigned: false
+      userAssignedResourceIds: [
+        userAssignedIdentityResourceId
+      ]
     }
-    siteConfig: {
-      ipSecurityRestrictionsDefaultAction: 'Allow'
-      scmIpSecurityRestrictionsDefaultAction: 'Allow'
-      scmIpSecurityRestrictionsUseMain: false
+    storageManagedIdentity: {
+      userAssignedResourceId: userAssignedIdentityResourceId
     }
   }
 }

@@ -18,6 +18,20 @@ param managedIdentities = {
   systemAssigned: true
 }
 
+// This quickstart keeps the Function App and Storage Account publicly reachable.
+// Omit these overrides and configure Private Endpoints for private deployments.
+param publicNetworkAccess = 'Enabled'
+
+param storageAccount = {
+  publicNetworkAccess: 'Enabled'
+}
+
+param siteConfig = {
+  ipSecurityRestrictionsDefaultAction: 'Allow'
+  scmIpSecurityRestrictionsDefaultAction: 'Allow'
+  scmIpSecurityRestrictionsUseMain: false
+}
+
 param maximumInstanceCount = 50
 param instanceMemoryInMb = 2048
 
@@ -41,6 +55,19 @@ param tags = {
 // param storageAccount = {
 //   publicNetworkAccess: 'Disabled'
 // }
+// To use a user-assigned managed identity for Acmebot and AzureWebJobsStorage:
+// param managedIdentities = {
+//   systemAssigned: false
+//   userAssignedResourceIds: [
+//     '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-identity/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-acmebot'
+//   ]
+// }
+// param storageManagedIdentity = {
+//   userAssignedResourceId: '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-identity/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-acmebot'
+// }
+// Add the identity client ID to the acmebot object:
+// managedIdentityClientId: '00000000-0000-0000-0000-000000000000'
+//
 // param storageAccountPrivateEndpoints = [
 //   {
 //     name: 'pep-func-acmebot-dev-blob'

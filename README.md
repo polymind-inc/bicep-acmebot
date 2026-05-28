@@ -10,7 +10,8 @@ It deploys:
 - Log Analytics Workspace
 - Application Insights
 - optional App Service Authentication
-- optional private endpoints, diagnostic settings, role assignments, and locks
+- managed diagnostic settings by default
+- optional private endpoints, role assignments, and locks
 
 ## Usage
 
@@ -43,6 +44,18 @@ param acmebot = {
 param managedIdentities = {
   systemAssigned: true
 }
+
+param publicNetworkAccess = 'Enabled'
+
+param storageAccount = {
+  publicNetworkAccess: 'Enabled'
+}
+
+param siteConfig = {
+  ipSecurityRestrictionsDefaultAction: 'Allow'
+  scmIpSecurityRestrictionsDefaultAction: 'Allow'
+  scmIpSecurityRestrictionsUseMain: false
+}
 ```
 
 ## Notes
@@ -51,11 +64,13 @@ The module intentionally composes published AVM Bicep modules from the public re
 
 Inputs favor Bicep AVM module shapes instead of mirroring the Terraform variable model exactly. For example, Function App and Storage Account private endpoints are passed as AVM-style arrays through `privateEndpoints` and `storageAccountPrivateEndpoints`.
 
+The module defaults to a private posture like the Terraform implementation: Function App and Storage Account public network access default to `Disabled`, and Storage diagnostics are sent to the module-managed or supplied Log Analytics workspace by default. Quickstart samples explicitly enable public access for low-friction testing.
+
 This module does not deploy its own AVM telemetry deployment. Telemetry for referenced published AVM modules is disabled by default and can be enabled by setting `enableTelemetry` to `true`.
 
 When `virtualNetworkSubnetId` is set, configure storage private endpoints for the storage services Acmebot needs, typically `blob`, `queue`, and `table`, and use a different subnet from the Function App integration subnet.
 
-Secret values passed through `acmebot` and `authSettings` are modeled as secure typed properties. `additionalAppSettings` remains a secure arbitrary object for custom app settings. These values are still configured as Function App settings.
+Secret values passed through `acmebot` and `authSettings` are modeled as secure typed properties. `additionalAppSettings` remains a secure arbitrary object for custom app settings, but module-managed Acmebot, storage, and authentication settings take precedence. These values are still configured as Function App settings.
 
 ## AVM Modules
 
