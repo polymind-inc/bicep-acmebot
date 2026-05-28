@@ -1,0 +1,6 @@
+.azure/
+*.json
+!bicepconfig.json
+!main.json
+!version.json
+examples/main.json
