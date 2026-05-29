@@ -14,7 +14,7 @@ type acmebotType = {
   mailAddress: string
   vaultUri: string
   acmeEndpoint: string?
-  environment: string?
+  environment: ('AzureCloud' | 'AzureChinaCloud' | 'AzureUSGovernment')?
   webhookUrl: string?
   preferredChain: string?
   preferredProfile: string?
@@ -163,7 +163,7 @@ type externalAccountBindingType = {
   keyId: string
   @secure()
   hmacKey: string
-  algorithm: string?
+  algorithm: ('HS256' | 'HS384' | 'HS512')?
 }
 
 @export()
@@ -423,7 +423,7 @@ param managedIdentities managedIdentityAllType = {
   userAssignedResourceIds: []
 }
 
-@description('Optional. Managed identity used by AzureWebJobsStorage and Flex Consumption deployment storage. When unset, the Function App system-assigned managed identity is used.')
+@description('Optional. Managed identity used by AzureWebJobsStorage and Flex Consumption deployment storage. When unset, the Function App system-assigned managed identity is used. Required (along with acmebot.managedIdentityClientId) when managedIdentities.systemAssigned is false; the module does not auto-select an attached user-assigned identity.')
 param storageManagedIdentity storageManagedIdentityType = {}
 
 @description('Optional. Resource lock configuration applied to the Function App and inherited by private endpoints unless endpoint inheritance is disabled.')
@@ -553,7 +553,7 @@ var externalAccountBinding = acmebot.?externalAccountBinding ?? null
 var webhookUrl = acmebot.?webhookUrl ?? null
 var preferredChain = acmebot.?preferredChain ?? null
 var preferredProfile = acmebot.?preferredProfile ?? null
-var acmebotManagedIdentityClientId = acmebot.?managedIdentityClientId ?? (storageUsesUserAssignedIdentity ? storageManagedIdentityClientId : null)
+var acmebotManagedIdentityClientId = acmebot.?managedIdentityClientId ?? null
 var acmebotEnvironment = acmebot.?environment ?? 'AzureCloud'
 var acmebotUseSystemNameServer = acmebot.?useSystemNameServer ?? (virtualNetworkSubnetId != null || acmebotEnvironment != 'AzureCloud')
 
@@ -818,14 +818,10 @@ var storagePrimaryEndpoints = storage.outputs.serviceEndpoints
 var storageContainerEndpointUrl = '${storagePrimaryEndpoints.blob}${deploymentContainerName}'
 
 var systemAssignedEnabled = managedIdentities.?systemAssigned ?? true
-var functionAppUserAssignedResourceIds = managedIdentities.?userAssignedResourceIds ?? []
-// When the Function App has no system-assigned identity, storage access must use a user-assigned
-// identity. Default to the Function App's first user-assigned identity so the common single-identity
-// configuration works without also setting storageManagedIdentity explicitly.
-var fallbackStorageUserAssignedResourceId = !systemAssignedEnabled && !empty(functionAppUserAssignedResourceIds)
-  ? first(functionAppUserAssignedResourceIds)
-  : ''
-var storageUserAssignedIdentityResourceId = storageManagedIdentity.?userAssignedResourceId ?? fallbackStorageUserAssignedResourceId
+// Storage identity must be supplied explicitly. When no system-assigned identity is enabled,
+// set storageManagedIdentity.userAssignedResourceId (and acmebot.managedIdentityClientId) to an
+// attached user-assigned identity; the module does not auto-select one.
+var storageUserAssignedIdentityResourceId = storageManagedIdentity.?userAssignedResourceId ?? ''
 var storageUsesUserAssignedIdentity = !empty(storageUserAssignedIdentityResourceId)
 var storageAuthenticationType = storageUsesUserAssignedIdentity ? 'UserAssignedIdentity' : 'SystemAssignedIdentity'
 var storageIdentityConfigured = storageUsesUserAssignedIdentity || systemAssignedEnabled
@@ -871,7 +867,7 @@ var flexFunctionConfig = {
     version: '10.0'
   }
   scaleAndConcurrency: {
-    maximumInstanceCount: maximumInstanceCount ?? 40
+    maximumInstanceCount: maximumInstanceCount ?? 100
     instanceMemoryMB: instanceMemoryInMb ?? 2048
   }
 }

@@ -11,6 +11,11 @@ param userAssignedIdentityResourceId string
 
 var functionAppName = take('func-acmebot-${uniqueString(resourceGroup().id, deployment().name)}', 32)
 
+resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
+  name: last(split(userAssignedIdentityResourceId, '/'))
+  scope: resourceGroup(split(userAssignedIdentityResourceId, '/')[2], split(userAssignedIdentityResourceId, '/')[4])
+}
+
 module testDeployment '../../../main.bicep' = {
   name: take('acmebot-${uniqueString(resourceId('Microsoft.Web/sites', functionAppName), location)}-uami', 64)
   params: {
@@ -20,6 +25,8 @@ module testDeployment '../../../main.bicep' = {
       version: '5.0.1'
       mailAddress: 'admin@example.com'
       vaultUri: 'https://kv-acmebot-test${environment().suffixes.keyvaultDns}/'
+      // Required when no system-assigned identity is enabled; the module no longer auto-resolves it.
+      managedIdentityClientId: userAssignedIdentity.properties.clientId
       dnsProviders: {
         azureDns: {
           subscriptionId: subscription().subscriptionId
@@ -31,6 +38,10 @@ module testDeployment '../../../main.bicep' = {
       userAssignedResourceIds: [
         userAssignedIdentityResourceId
       ]
+    }
+    // Route AzureWebJobsStorage and deployment storage through the same user-assigned identity.
+    storageManagedIdentity: {
+      userAssignedResourceId: userAssignedIdentityResourceId
     }
   }
 }
