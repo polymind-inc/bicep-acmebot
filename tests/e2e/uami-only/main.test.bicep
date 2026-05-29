@@ -25,16 +25,12 @@ module testDeployment '../../../main.bicep' = {
           subscriptionId: subscription().subscriptionId
         }
       }
-      managedIdentityClientId: ''
     }
     managedIdentities: {
       systemAssigned: false
       userAssignedResourceIds: [
         userAssignedIdentityResourceId
       ]
-    }
-    storageManagedIdentity: {
-      userAssignedResourceId: userAssignedIdentityResourceId
     }
   }
 }

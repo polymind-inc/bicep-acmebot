@@ -553,7 +553,7 @@ var externalAccountBinding = acmebot.?externalAccountBinding ?? null
 var webhookUrl = acmebot.?webhookUrl ?? null
 var preferredChain = acmebot.?preferredChain ?? null
 var preferredProfile = acmebot.?preferredProfile ?? null
-var acmebotManagedIdentityClientId = acmebot.?managedIdentityClientId ?? null
+var acmebotManagedIdentityClientId = acmebot.?managedIdentityClientId ?? (storageUsesUserAssignedIdentity ? storageManagedIdentityClientId : null)
 var acmebotEnvironment = acmebot.?environment ?? 'AzureCloud'
 var acmebotUseSystemNameServer = acmebot.?useSystemNameServer ?? (virtualNetworkSubnetId != null || acmebotEnvironment != 'AzureCloud')
 
@@ -818,7 +818,14 @@ var storagePrimaryEndpoints = storage.outputs.serviceEndpoints
 var storageContainerEndpointUrl = '${storagePrimaryEndpoints.blob}${deploymentContainerName}'
 
 var systemAssignedEnabled = managedIdentities.?systemAssigned ?? true
-var storageUserAssignedIdentityResourceId = storageManagedIdentity.?userAssignedResourceId ?? ''
+var functionAppUserAssignedResourceIds = managedIdentities.?userAssignedResourceIds ?? []
+// When the Function App has no system-assigned identity, storage access must use a user-assigned
+// identity. Default to the Function App's first user-assigned identity so the common single-identity
+// configuration works without also setting storageManagedIdentity explicitly.
+var fallbackStorageUserAssignedResourceId = !systemAssignedEnabled && !empty(functionAppUserAssignedResourceIds)
+  ? first(functionAppUserAssignedResourceIds)
+  : ''
+var storageUserAssignedIdentityResourceId = storageManagedIdentity.?userAssignedResourceId ?? fallbackStorageUserAssignedResourceId
 var storageUsesUserAssignedIdentity = !empty(storageUserAssignedIdentityResourceId)
 var storageAuthenticationType = storageUsesUserAssignedIdentity ? 'UserAssignedIdentity' : 'SystemAssignedIdentity'
 var storageIdentityConfigured = storageUsesUserAssignedIdentity || systemAssignedEnabled

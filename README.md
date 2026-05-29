@@ -70,6 +70,8 @@ This module does not deploy its own telemetry deployment. Telemetry for referenc
 
 When `virtualNetworkSubnetId` is set, configure storage private endpoints for the storage services Acmebot needs, typically `blob`, `queue`, and `table`, and use a different subnet from the Function App integration subnet.
 
+For managed identity, the Function App uses a system-assigned identity by default. When you disable it by setting `managedIdentities.systemAssigned` to `false` and supply `userAssignedResourceIds`, the module uses the first user-assigned identity for `AzureWebJobsStorage` and the Flex Consumption deployment storage, and resolves its client ID for Acmebot automatically. Set `storageManagedIdentity.userAssignedResourceId` to use a different identity for storage, or `acmebot.managedIdentityClientId` to override the Acmebot client ID.
+
 Secret values passed through `acmebot` and `authSettings` are modeled as secure typed properties. `additionalAppSettings` remains a secure arbitrary object for custom app settings, but module-managed Acmebot, storage, and authentication settings take precedence. These values are still configured as Function App settings.
 
 ## Referenced Public Modules

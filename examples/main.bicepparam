@@ -62,10 +62,13 @@ param tags = {
 //     '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-identity/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-acmebot'
 //   ]
 // }
+// The module uses the first user-assigned identity above for AzureWebJobsStorage and the deployment
+// storage, and resolves its client ID for Acmebot automatically. Override only if you need a
+// different identity for storage, or a different Acmebot client ID:
 // param storageManagedIdentity = {
 //   userAssignedResourceId: '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-identity/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-acmebot'
 // }
-// Add the identity client ID to the acmebot object:
+// Add the identity client ID to the acmebot object to override auto-resolution:
 // managedIdentityClientId: '00000000-0000-0000-0000-000000000000'
 //
 // param storageAccountPrivateEndpoints = [
