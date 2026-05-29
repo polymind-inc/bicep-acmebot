@@ -12,7 +12,7 @@ param userAssignedIdentityResourceId string
 var functionAppName = take('func-acmebot-${uniqueString(resourceGroup().id, deployment().name)}', 32)
 
 module testDeployment '../../../main.bicep' = {
-  name: take('avm-${uniqueString(resourceId('Microsoft.Web/sites', functionAppName), location)}-uami', 64)
+  name: take('acmebot-${uniqueString(resourceId('Microsoft.Web/sites', functionAppName), location)}-uami', 64)
   params: {
     name: functionAppName
     location: location

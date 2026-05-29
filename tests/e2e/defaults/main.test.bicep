@@ -9,7 +9,7 @@ param location string = resourceGroup().location
 var functionAppName = take('func-acmebot-${uniqueString(resourceGroup().id, deployment().name)}', 32)
 
 module testDeployment '../../../main.bicep' = {
-  name: take('avm-${uniqueString(resourceId('Microsoft.Web/sites', functionAppName), location)}-defaults', 64)
+  name: take('acmebot-${uniqueString(resourceId('Microsoft.Web/sites', functionAppName), location)}-defaults', 64)
   params: {
     name: functionAppName
     location: location

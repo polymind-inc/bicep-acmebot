@@ -1,7 +1,7 @@
 targetScope = 'resourceGroup'
 
 metadata name = 'Azure Acmebot'
-metadata description = 'Deploys Azure Acmebot on Azure Functions Flex Consumption by composing Azure Verified Modules.'
+metadata description = 'Deploys Azure Acmebot on Azure Functions Flex Consumption using AVM-aligned conventions and published Bicep modules.'
 
 import { diagnosticSettingFullType } from 'br/public:avm/utl/types/avm-common-types:0.6.1'
 import { lockType } from 'br/public:avm/utl/types/avm-common-types:0.6.1'
@@ -399,16 +399,16 @@ param additionalAppSettings object = {}
 @description('Optional. App Service Authentication settings for Microsoft Entra ID.')
 param authSettings authSettingsType?
 
-@description('Optional. Diagnostic settings for the Function App, using the AVM diagnosticSettings shape.')
+@description('Optional. Diagnostic settings for the Function App, using an AVM-aligned diagnosticSettings shape.')
 param diagnosticSettings diagnosticSettingFullType[] = []
 
 @description('Optional. Whether the module creates default diagnostic settings for the Function App and Storage Account resources to the module-managed or supplied Log Analytics workspace. When diagnosticSettings is set, those Function App settings are used instead of the default.')
 param managedDiagnosticSettingsEnabled bool = true
 
-@description('Optional. Private endpoints for the Function App, using the AVM web/site privateEndpoints array shape.')
+@description('Optional. Private endpoints for the Function App, using an AVM-aligned web/site privateEndpoints array shape.')
 param privateEndpoints privateEndpointType[] = []
 
-@description('Optional. Private endpoints for the Storage Account, using the AVM storage-account privateEndpoints array shape.')
+@description('Optional. Private endpoints for the Storage Account, using an AVM-aligned storage-account privateEndpoints array shape.')
 param storageAccountPrivateEndpoints privateEndpointType[] = []
 
 @description('Optional. Tags applied to child resources unless overridden.')
@@ -429,10 +429,10 @@ param storageManagedIdentity storageManagedIdentityType = {}
 @description('Optional. Resource lock configuration applied to the Function App and inherited by private endpoints unless endpoint inheritance is disabled.')
 param lock lockType?
 
-@description('Optional. Role assignments for the Function App, using the AVM roleAssignments shape.')
+@description('Optional. Role assignments for the Function App, using an AVM-aligned roleAssignments shape.')
 param roleAssignments roleAssignmentType[] = []
 
-@description('Optional. Storage Account settings for the Function App deployment package. Use AVM storage-account parameter names where applicable.')
+@description('Optional. Storage Account settings for the Function App deployment package. Use AVM-aligned storage-account parameter names where applicable.')
 param storageAccount storageAccountType = {}
 
 @description('Optional. Storage container settings for the Function App deployment package.')
@@ -472,7 +472,7 @@ param configs webConfigType[] = []
 @description('Optional. Whether to read and export the default function host key.')
 param exportApiKey bool = false
 
-@description('Optional. Enable or disable telemetry for referenced published AVM modules. This module does not deploy its own AVM telemetry deployment.')
+@description('Optional. Enable or disable telemetry for referenced published Azure Verified Modules. This module does not deploy its own telemetry deployment.')
 param enableTelemetry bool = false
 
 var functionAppName = name
@@ -507,14 +507,14 @@ var servicePlanResourceId = resourceId('Microsoft.Web/serverfarms', servicePlanN
 var logAnalyticsWorkspaceResourceId = resourceId('Microsoft.OperationalInsights/workspaces', logAnalyticsWorkspaceName)
 var applicationInsightsResourceId = resourceId('Microsoft.Insights/components', applicationInsightsName)
 var storageAccountResourceId = resourceId('Microsoft.Storage/storageAccounts', storageAccountName)
-var servicePlanDeploymentName = take('avm-${uniqueString(servicePlanResourceId, location)}-serverfarm', 64)
+var servicePlanDeploymentName = take('acmebot-${uniqueString(servicePlanResourceId, location)}-serverfarm', 64)
 var logAnalyticsWorkspaceDeploymentName = take(
-  'avm-${uniqueString(logAnalyticsWorkspaceResourceId, location)}-workspace',
+  'acmebot-${uniqueString(logAnalyticsWorkspaceResourceId, location)}-workspace',
   64
 )
-var applicationInsightsDeploymentName = take('avm-${uniqueString(applicationInsightsResourceId, location)}-appi', 64)
-var storageAccountDeploymentName = take('avm-${uniqueString(storageAccountResourceId, location)}-storage', 64)
-var functionAppDeploymentName = take('avm-${uniqueString(functionAppResourceId, location)}-site', 64)
+var applicationInsightsDeploymentName = take('acmebot-${uniqueString(applicationInsightsResourceId, location)}-appi', 64)
+var storageAccountDeploymentName = take('acmebot-${uniqueString(storageAccountResourceId, location)}-storage', 64)
+var functionAppDeploymentName = take('acmebot-${uniqueString(functionAppResourceId, location)}-site', 64)
 
 var createLogAnalyticsWorkspace = empty(logAnalyticsWorkspaceResourceIdInput) && (empty(applicationInsightsResourceIdInput) || managedDiagnosticSettingsEnabled)
 var createApplicationInsights = empty(applicationInsightsResourceIdInput)
@@ -1015,7 +1015,7 @@ module site 'br/public:avm/res/web/site:0.23.0' = {
 }
 
 module uamiLookup 'modules/uami-lookup.bicep' = if (storageUsesUserAssignedIdentity) {
-  name: take('avm-${uniqueString(storageUserAssignedIdentityResourceId, location)}-uami', 64)
+  name: take('acmebot-${uniqueString(storageUserAssignedIdentityResourceId, location)}-uami', 64)
   scope: resourceGroup(
     split(storageUserAssignedIdentityResourceId, '/')[2],
     split(storageUserAssignedIdentityResourceId, '/')[4]

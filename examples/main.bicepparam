@@ -49,7 +49,7 @@ param tags = {
 //   }
 // }
 
-// Private endpoint example using AVM module shapes:
+// Private endpoint example using AVM-aligned module shapes:
 // param publicNetworkAccess = 'Disabled'
 // param virtualNetworkSubnetId = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-acmebot/subnets/snet-functions'
 // param storageAccount = {

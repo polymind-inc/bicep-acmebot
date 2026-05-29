@@ -6,10 +6,10 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "12906341698535228298"
+      "templateHash": "5141215119668021487"
     },
     "name": "Azure Acmebot",
-    "description": "Deploys Azure Acmebot on Azure Functions Flex Consumption by composing Azure Verified Modules."
+    "description": "Deploys Azure Acmebot on Azure Functions Flex Consumption using AVM-aligned conventions and published Bicep modules."
   },
   "definitions": {
     "acmebotType": {
@@ -1349,7 +1349,7 @@
       },
       "defaultValue": [],
       "metadata": {
-        "description": "Optional. Diagnostic settings for the Function App, using the AVM diagnosticSettings shape."
+        "description": "Optional. Diagnostic settings for the Function App, using an AVM-aligned diagnosticSettings shape."
       }
     },
     "managedDiagnosticSettingsEnabled": {
@@ -1366,7 +1366,7 @@
       },
       "defaultValue": [],
       "metadata": {
-        "description": "Optional. Private endpoints for the Function App, using the AVM web/site privateEndpoints array shape."
+        "description": "Optional. Private endpoints for the Function App, using an AVM-aligned web/site privateEndpoints array shape."
       }
     },
     "storageAccountPrivateEndpoints": {
@@ -1376,7 +1376,7 @@
       },
       "defaultValue": [],
       "metadata": {
-        "description": "Optional. Private endpoints for the Storage Account, using the AVM storage-account privateEndpoints array shape."
+        "description": "Optional. Private endpoints for the Storage Account, using an AVM-aligned storage-account privateEndpoints array shape."
       }
     },
     "tags": {
@@ -1424,14 +1424,14 @@
       },
       "defaultValue": [],
       "metadata": {
-        "description": "Optional. Role assignments for the Function App, using the AVM roleAssignments shape."
+        "description": "Optional. Role assignments for the Function App, using an AVM-aligned roleAssignments shape."
       }
     },
     "storageAccount": {
       "$ref": "#/definitions/storageAccountType",
       "defaultValue": {},
       "metadata": {
-        "description": "Optional. Storage Account settings for the Function App deployment package. Use AVM storage-account parameter names where applicable."
+        "description": "Optional. Storage Account settings for the Function App deployment package. Use AVM-aligned storage-account parameter names where applicable."
       }
     },
     "deploymentContainer": {
@@ -1518,7 +1518,7 @@
       "type": "bool",
       "defaultValue": false,
       "metadata": {
-        "description": "Optional. Enable or disable telemetry for referenced published AVM modules. This module does not deploy its own AVM telemetry deployment."
+        "description": "Optional. Enable or disable telemetry for referenced published Azure Verified Modules. This module does not deploy its own telemetry deployment."
       }
     }
   },
@@ -1551,11 +1551,11 @@
     "logAnalyticsWorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsWorkspaceName'))]",
     "applicationInsightsResourceId": "[resourceId('Microsoft.Insights/components', variables('applicationInsightsName'))]",
     "storageAccountResourceId": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
-    "servicePlanDeploymentName": "[take(format('avm-{0}-serverfarm', uniqueString(variables('servicePlanResourceId'), parameters('location'))), 64)]",
-    "logAnalyticsWorkspaceDeploymentName": "[take(format('avm-{0}-workspace', uniqueString(variables('logAnalyticsWorkspaceResourceId'), parameters('location'))), 64)]",
-    "applicationInsightsDeploymentName": "[take(format('avm-{0}-appi', uniqueString(variables('applicationInsightsResourceId'), parameters('location'))), 64)]",
-    "storageAccountDeploymentName": "[take(format('avm-{0}-storage', uniqueString(variables('storageAccountResourceId'), parameters('location'))), 64)]",
-    "functionAppDeploymentName": "[take(format('avm-{0}-site', uniqueString(variables('functionAppResourceId'), parameters('location'))), 64)]",
+    "servicePlanDeploymentName": "[take(format('acmebot-{0}-serverfarm', uniqueString(variables('servicePlanResourceId'), parameters('location'))), 64)]",
+    "logAnalyticsWorkspaceDeploymentName": "[take(format('acmebot-{0}-workspace', uniqueString(variables('logAnalyticsWorkspaceResourceId'), parameters('location'))), 64)]",
+    "applicationInsightsDeploymentName": "[take(format('acmebot-{0}-appi', uniqueString(variables('applicationInsightsResourceId'), parameters('location'))), 64)]",
+    "storageAccountDeploymentName": "[take(format('acmebot-{0}-storage', uniqueString(variables('storageAccountResourceId'), parameters('location'))), 64)]",
+    "functionAppDeploymentName": "[take(format('acmebot-{0}-site', uniqueString(variables('functionAppResourceId'), parameters('location'))), 64)]",
     "createLogAnalyticsWorkspace": "[and(empty(variables('logAnalyticsWorkspaceResourceIdInput')), or(empty(variables('applicationInsightsResourceIdInput')), parameters('managedDiagnosticSettingsEnabled')))]",
     "createApplicationInsights": "[empty(variables('applicationInsightsResourceIdInput'))]",
     "acmebotMajorVersion": "[format('v{0}', split(parameters('acmebot').version, '.')[0])]",
@@ -29307,7 +29307,7 @@
       "condition": "[variables('storageUsesUserAssignedIdentity')]",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
-      "name": "[take(format('avm-{0}-uami', uniqueString(variables('storageUserAssignedIdentityResourceId'), parameters('location'))), 64)]",
+      "name": "[take(format('acmebot-{0}-uami', uniqueString(variables('storageUserAssignedIdentityResourceId'), parameters('location'))), 64)]",
       "subscriptionId": "[split(variables('storageUserAssignedIdentityResourceId'), '/')[2]]",
       "resourceGroup": "[split(variables('storageUserAssignedIdentityResourceId'), '/')[4]]",
       "properties": {
