@@ -34,7 +34,6 @@ type dnsProvidersType = {
   cloudflare: cloudflareType?
   customDns: customDnsType?
   dnsMadeEasy: dnsMadeEasyType?
-  gandi: gandiLiveDnsType?
   gandiLiveDns: gandiLiveDnsType?
   goDaddy: goDaddyType?
   googleDns: googleDnsType?
@@ -224,13 +223,6 @@ type tagType = object
 
 @export()
 type siteConfigType = {
-  minTlsVersion: string?
-  scmMinTlsVersion: string?
-  ftpsState: string?
-  alwaysOn: bool?
-  http20Enabled: bool?
-  healthCheckPath: string?
-  appCommandLine: string?
   scmIpSecurityRestrictionsUseMain: bool?
   vnetRouteAllEnabled: bool?
   ipSecurityRestrictionsDefaultAction: ipRestrictionDefaultActionType?
@@ -243,16 +235,11 @@ type siteConfigType = {
 type storageAccountType = {
   name: string?
   accountReplicationType: storageAccountReplicationType?
-  kind: storageAccountKindType?
-  skuName: storageAccountSkuNameType?
   defaultToOAuthAuthentication: bool?
   allowSharedKeyAccess: bool?
   requireInfrastructureEncryption: bool?
   publicNetworkAccess: storageAccountPublicNetworkAccessType?
   blobServices: blobServicesType?
-  queueServices: storageServiceType?
-  tableServices: storageServiceType?
-  diagnosticSettings: storageAccountDiagnosticSettingType[]?
   networkAcls: object?
   tags: object?
 }
@@ -261,27 +248,7 @@ type storageAccountType = {
 type ipRestrictionDefaultActionType = 'Allow' | 'Deny'
 
 @export()
-type storageAccountKindType = 'BlobStorage' | 'BlockBlobStorage' | 'FileStorage' | 'Storage' | 'StorageV2'
-
-@export()
 type storageAccountReplicationType = 'LRS' | 'GRS' | 'RAGRS' | 'ZRS' | 'GZRS' | 'RAGZRS'
-
-@export()
-type storageAccountSkuNameType =
-  | 'PremiumV2_LRS'
-  | 'PremiumV2_ZRS'
-  | 'Premium_LRS'
-  | 'Premium_ZRS'
-  | 'StandardV2_GRS'
-  | 'StandardV2_GZRS'
-  | 'StandardV2_LRS'
-  | 'StandardV2_ZRS'
-  | 'Standard_GRS'
-  | 'Standard_GZRS'
-  | 'Standard_LRS'
-  | 'Standard_RAGRS'
-  | 'Standard_RAGZRS'
-  | 'Standard_ZRS'
 
 @export()
 type storageAccountPublicNetworkAccessType = 'Disabled' | 'Enabled' | 'SecuredByPerimeter'
@@ -300,44 +267,8 @@ type blobServicesType = {
   deleteRetentionPolicyDays: int?
   deleteRetentionPolicyAllowPermanentDelete: bool?
   isVersioningEnabled: bool?
-  versionDeletePolicyDays: int?
   restorePolicyEnabled: bool?
   restorePolicyDays: int?
-  containers: storageContainerType[]?
-  diagnosticSettings: diagnosticSettingFullType[]?
-}
-
-@export()
-type storageContainerType = {
-  name: string
-  publicAccess: string?
-  metadata: object?
-}
-
-@export()
-type storageServiceType = {
-  diagnosticSettings: diagnosticSettingFullType[]?
-}
-
-@export()
-type storageAccountDiagnosticSettingType = {
-  name: string?
-  metricCategories: diagnosticMetricCategoryType[]?
-  logAnalyticsDestinationType: logAnalyticsDestinationType?
-  workspaceResourceId: string?
-  storageAccountResourceId: string?
-  eventHubAuthorizationRuleResourceId: string?
-  eventHubName: string?
-  marketplacePartnerResourceId: string?
-}
-
-@export()
-type logAnalyticsDestinationType = 'AzureDiagnostics' | 'Dedicated'
-
-@export()
-type diagnosticMetricCategoryType = {
-  category: string
-  enabled: bool?
 }
 
 @export()
@@ -348,8 +279,6 @@ type deploymentContainerType = {
 @export()
 type servicePlanType = {
   name: string?
-  kind: string?
-  skuName: string?
   zoneRedundant: bool?
   tags: object?
 }
@@ -372,13 +301,6 @@ type applicationInsightsType = {
 @export()
 type storageManagedIdentityType = {
   userAssignedResourceId: string?
-}
-
-@export()
-type webConfigType = {
-  name: string
-  properties: object
-  kind: string?
 }
 
 @minLength(2)
@@ -465,9 +387,6 @@ param maximumInstanceCount int?
 ])
 @description('Optional. Memory size in MB for Flex Consumption instances.')
 param instanceMemoryInMb int?
-
-@description('Optional. Additional Web/Function App config child resources, appended after appsettings and authsettingsV2.')
-param configs webConfigType[] = []
 
 @description('Optional. Whether to read and export the default function host key.')
 param exportApiKey bool = false
@@ -562,7 +481,7 @@ var azurePrivateDns = dnsProviders.?azurePrivateDns ?? null
 var cloudflare = dnsProviders.?cloudflare ?? null
 var customDns = dnsProviders.?customDns ?? null
 var dnsMadeEasy = dnsProviders.?dnsMadeEasy ?? null
-var gandiLiveDns = dnsProviders.?gandiLiveDns ?? dnsProviders.?gandi ?? null
+var gandiLiveDns = dnsProviders.?gandiLiveDns ?? null
 var goDaddy = dnsProviders.?goDaddy ?? null
 var googleDns = dnsProviders.?googleDns ?? null
 var ionosDns = dnsProviders.?ionosDns ?? null
@@ -768,10 +687,7 @@ var defaultStorageServiceDiagnosticSettings = [
   }
 ]
 
-var storageAccountDiagnosticSettings = storageAccount.?diagnosticSettings ?? (managedDiagnosticSettingsEnabled ? defaultStorageAccountDiagnosticSettings : [])
-
-var userContainers = storageAccount.?blobServices.?containers ?? []
-var hasDeploymentContainer = !empty(filter(userContainers, c => c.name == deploymentContainerName))
+var storageAccountDiagnosticSettings = managedDiagnosticSettingsEnabled ? defaultStorageAccountDiagnosticSettings : []
 
 var storageBlobServices = union(
   union({
@@ -787,30 +703,22 @@ var storageBlobServices = union(
   } : {}),
   storageAccount.?blobServices ?? {},
   {
-    containers: hasDeploymentContainer
-      ? userContainers
-      : concat(userContainers, [
-          {
-            name: deploymentContainerName
-            publicAccess: 'None'
-          }
-        ])
+    containers: [
+      {
+        name: deploymentContainerName
+        publicAccess: 'None'
+      }
+    ]
   }
 )
 
-var storageQueueServices = union(
-  managedDiagnosticSettingsEnabled ? {
-    diagnosticSettings: defaultStorageServiceDiagnosticSettings
-  } : {},
-  storageAccount.?queueServices ?? {}
-)
+var storageQueueServices = managedDiagnosticSettingsEnabled ? {
+  diagnosticSettings: defaultStorageServiceDiagnosticSettings
+} : {}
 
-var storageTableServices = union(
-  managedDiagnosticSettingsEnabled ? {
-    diagnosticSettings: defaultStorageServiceDiagnosticSettings
-  } : {},
-  storageAccount.?tableServices ?? {}
-)
+var storageTableServices = managedDiagnosticSettingsEnabled ? {
+  diagnosticSettings: defaultStorageServiceDiagnosticSettings
+} : {}
 
 var storageAccountReplication = storageAccount.?accountReplicationType ?? 'LRS'
 var storageAccountDefaultSkuName = storageAccountReplication == 'GRS'
@@ -822,7 +730,7 @@ var storageAccountDefaultSkuName = storageAccountReplication == 'GRS'
           : (storageAccountReplication == 'GZRS'
               ? 'Standard_GZRS'
               : (storageAccountReplication == 'RAGZRS' ? 'Standard_RAGZRS' : 'Standard_LRS'))))
-var storageAccountSkuName = storageAccount.?skuName ?? storageAccountDefaultSkuName
+var storageAccountSkuName = storageAccountDefaultSkuName
 
 var functionAppSiteConfig = union(
   {
@@ -946,8 +854,7 @@ var functionAppConfigs = concat(
       properties: functionAppSettings
     }
   ],
-  authSettingsV2 == null ? [] : [authSettingsV2],
-  configs
+  authSettingsV2 == null ? [] : [authSettingsV2]
 )
 
 module storage 'br/public:avm/res/storage/storage-account:0.32.0' = {
@@ -955,7 +862,7 @@ module storage 'br/public:avm/res/storage/storage-account:0.32.0' = {
   params: {
     name: storageAccountName
     location: location
-    kind: storageAccount.?kind ?? 'StorageV2'
+    kind: 'StorageV2'
     skuName: storageAccountSkuName
     allowBlobPublicAccess: false
     defaultToOAuthAuthentication: storageAccount.?defaultToOAuthAuthentication ?? true
@@ -980,9 +887,9 @@ module serverfarm 'br/public:avm/res/web/serverfarm:0.7.0' = {
   params: {
     name: servicePlanName
     location: location
-    kind: servicePlan.?kind ?? 'functionapp'
+    kind: 'functionapp'
     reserved: true
-    skuName: servicePlan.?skuName ?? 'FC1'
+    skuName: 'FC1'
     zoneRedundant: servicePlan.?zoneRedundant ?? false
     tags: servicePlan.?tags ?? resourceTags
     enableTelemetry: enableTelemetry

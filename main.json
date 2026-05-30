@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "136581172976868971"
+      "templateHash": "749735128829468863"
     },
     "name": "Azure Acmebot",
     "description": "Deploys Azure Acmebot on Azure Functions Flex Consumption using AVM-aligned conventions and published Bicep modules."
@@ -103,10 +103,6 @@
         },
         "dnsMadeEasy": {
           "$ref": "#/definitions/dnsMadeEasyType",
-          "nullable": true
-        },
-        "gandi": {
-          "$ref": "#/definitions/gandiLiveDnsType",
           "nullable": true
         },
         "gandiLiveDns": {
@@ -557,34 +553,6 @@
     "siteConfigType": {
       "type": "object",
       "properties": {
-        "minTlsVersion": {
-          "type": "string",
-          "nullable": true
-        },
-        "scmMinTlsVersion": {
-          "type": "string",
-          "nullable": true
-        },
-        "ftpsState": {
-          "type": "string",
-          "nullable": true
-        },
-        "alwaysOn": {
-          "type": "bool",
-          "nullable": true
-        },
-        "http20Enabled": {
-          "type": "bool",
-          "nullable": true
-        },
-        "healthCheckPath": {
-          "type": "string",
-          "nullable": true
-        },
-        "appCommandLine": {
-          "type": "string",
-          "nullable": true
-        },
         "scmIpSecurityRestrictionsUseMain": {
           "type": "bool",
           "nullable": true
@@ -631,14 +599,6 @@
           "$ref": "#/definitions/storageAccountReplicationType",
           "nullable": true
         },
-        "kind": {
-          "$ref": "#/definitions/storageAccountKindType",
-          "nullable": true
-        },
-        "skuName": {
-          "$ref": "#/definitions/storageAccountSkuNameType",
-          "nullable": true
-        },
         "defaultToOAuthAuthentication": {
           "type": "bool",
           "nullable": true
@@ -657,21 +617,6 @@
         },
         "blobServices": {
           "$ref": "#/definitions/blobServicesType",
-          "nullable": true
-        },
-        "queueServices": {
-          "$ref": "#/definitions/storageServiceType",
-          "nullable": true
-        },
-        "tableServices": {
-          "$ref": "#/definitions/storageServiceType",
-          "nullable": true
-        },
-        "diagnosticSettings": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/storageAccountDiagnosticSettingType"
-          },
           "nullable": true
         },
         "networkAcls": {
@@ -697,19 +642,6 @@
         "__bicep_export!": true
       }
     },
-    "storageAccountKindType": {
-      "type": "string",
-      "allowedValues": [
-        "BlobStorage",
-        "BlockBlobStorage",
-        "FileStorage",
-        "Storage",
-        "StorageV2"
-      ],
-      "metadata": {
-        "__bicep_export!": true
-      }
-    },
     "storageAccountReplicationType": {
       "type": "string",
       "allowedValues": [
@@ -719,28 +651,6 @@
         "RAGRS",
         "RAGZRS",
         "ZRS"
-      ],
-      "metadata": {
-        "__bicep_export!": true
-      }
-    },
-    "storageAccountSkuNameType": {
-      "type": "string",
-      "allowedValues": [
-        "PremiumV2_LRS",
-        "PremiumV2_ZRS",
-        "Premium_LRS",
-        "Premium_ZRS",
-        "StandardV2_GRS",
-        "StandardV2_GZRS",
-        "StandardV2_LRS",
-        "StandardV2_ZRS",
-        "Standard_GRS",
-        "Standard_GZRS",
-        "Standard_LRS",
-        "Standard_RAGRS",
-        "Standard_RAGZRS",
-        "Standard_ZRS"
       ],
       "metadata": {
         "__bicep_export!": true
@@ -806,132 +716,12 @@
           "type": "bool",
           "nullable": true
         },
-        "versionDeletePolicyDays": {
-          "type": "int",
-          "nullable": true
-        },
         "restorePolicyEnabled": {
           "type": "bool",
           "nullable": true
         },
         "restorePolicyDays": {
           "type": "int",
-          "nullable": true
-        },
-        "containers": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/storageContainerType"
-          },
-          "nullable": true
-        },
-        "diagnosticSettings": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/diagnosticSettingFullType"
-          },
-          "nullable": true
-        }
-      },
-      "metadata": {
-        "__bicep_export!": true
-      }
-    },
-    "storageContainerType": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "publicAccess": {
-          "type": "string",
-          "nullable": true
-        },
-        "metadata": {
-          "type": "object",
-          "nullable": true
-        }
-      },
-      "metadata": {
-        "__bicep_export!": true
-      }
-    },
-    "storageServiceType": {
-      "type": "object",
-      "properties": {
-        "diagnosticSettings": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/diagnosticSettingFullType"
-          },
-          "nullable": true
-        }
-      },
-      "metadata": {
-        "__bicep_export!": true
-      }
-    },
-    "storageAccountDiagnosticSettingType": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "nullable": true
-        },
-        "metricCategories": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/diagnosticMetricCategoryType"
-          },
-          "nullable": true
-        },
-        "logAnalyticsDestinationType": {
-          "$ref": "#/definitions/logAnalyticsDestinationType",
-          "nullable": true
-        },
-        "workspaceResourceId": {
-          "type": "string",
-          "nullable": true
-        },
-        "storageAccountResourceId": {
-          "type": "string",
-          "nullable": true
-        },
-        "eventHubAuthorizationRuleResourceId": {
-          "type": "string",
-          "nullable": true
-        },
-        "eventHubName": {
-          "type": "string",
-          "nullable": true
-        },
-        "marketplacePartnerResourceId": {
-          "type": "string",
-          "nullable": true
-        }
-      },
-      "metadata": {
-        "__bicep_export!": true
-      }
-    },
-    "logAnalyticsDestinationType": {
-      "type": "string",
-      "allowedValues": [
-        "AzureDiagnostics",
-        "Dedicated"
-      ],
-      "metadata": {
-        "__bicep_export!": true
-      }
-    },
-    "diagnosticMetricCategoryType": {
-      "type": "object",
-      "properties": {
-        "category": {
-          "type": "string"
-        },
-        "enabled": {
-          "type": "bool",
           "nullable": true
         }
       },
@@ -955,14 +745,6 @@
       "type": "object",
       "properties": {
         "name": {
-          "type": "string",
-          "nullable": true
-        },
-        "kind": {
-          "type": "string",
-          "nullable": true
-        },
-        "skuName": {
           "type": "string",
           "nullable": true
         },
@@ -1027,24 +809,6 @@
       "type": "object",
       "properties": {
         "userAssignedResourceId": {
-          "type": "string",
-          "nullable": true
-        }
-      },
-      "metadata": {
-        "__bicep_export!": true
-      }
-    },
-    "webConfigType": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "properties": {
-          "type": "object"
-        },
-        "kind": {
           "type": "string",
           "nullable": true
         }
@@ -1507,16 +1271,6 @@
         "description": "Optional. Memory size in MB for Flex Consumption instances."
       }
     },
-    "configs": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/webConfigType"
-      },
-      "defaultValue": [],
-      "metadata": {
-        "description": "Optional. Additional Web/Function App config child resources, appended after appsettings and authsettingsV2."
-      }
-    },
     "exportApiKey": {
       "type": "bool",
       "defaultValue": false,
@@ -1581,7 +1335,7 @@
     "cloudflare": "[coalesce(tryGet(variables('dnsProviders'), 'cloudflare'), null())]",
     "customDns": "[coalesce(tryGet(variables('dnsProviders'), 'customDns'), null())]",
     "dnsMadeEasy": "[coalesce(tryGet(variables('dnsProviders'), 'dnsMadeEasy'), null())]",
-    "gandiLiveDns": "[coalesce(coalesce(tryGet(variables('dnsProviders'), 'gandiLiveDns'), tryGet(variables('dnsProviders'), 'gandi')), null())]",
+    "gandiLiveDns": "[coalesce(tryGet(variables('dnsProviders'), 'gandiLiveDns'), null())]",
     "goDaddy": "[coalesce(tryGet(variables('dnsProviders'), 'goDaddy'), null())]",
     "googleDns": "[coalesce(tryGet(variables('dnsProviders'), 'googleDns'), null())]",
     "ionosDns": "[coalesce(tryGet(variables('dnsProviders'), 'ionosDns'), null())]",
@@ -1610,11 +1364,9 @@
     "acmebotAppSettings": "[union(variables('acmebotCommonAppSettings'), if(empty(coalesce(variables('externalAccountBinding'), createObject())), createObject(), createObject('Acmebot__ExternalAccountBinding__KeyId', variables('externalAccountBinding').keyId, 'Acmebot__ExternalAccountBinding__HmacKey', variables('externalAccountBinding').hmacKey, 'Acmebot__ExternalAccountBinding__Algorithm', coalesce(tryGet(variables('externalAccountBinding'), 'algorithm'), 'HS256'))), if(empty(coalesce(variables('akamai'), createObject())), createObject(), createObject('Acmebot__Akamai__Host', variables('akamai').host, 'Acmebot__Akamai__ClientToken', variables('akamai').clientToken, 'Acmebot__Akamai__ClientSecret', variables('akamai').clientSecret, 'Acmebot__Akamai__AccessToken', variables('akamai').accessToken)), if(empty(coalesce(variables('azureDns'), createObject())), createObject(), createObject('Acmebot__AzureDns__SubscriptionId', variables('azureDns').subscriptionId)), if(empty(coalesce(variables('azurePrivateDns'), createObject())), createObject(), createObject('Acmebot__AzurePrivateDns__SubscriptionId', variables('azurePrivateDns').subscriptionId)), if(empty(coalesce(variables('cloudflare'), createObject())), createObject(), createObject('Acmebot__Cloudflare__ApiToken', variables('cloudflare').apiToken)), if(empty(coalesce(variables('customDns'), createObject())), createObject(), createObject('Acmebot__CustomDns__Endpoint', variables('customDns').endpoint, 'Acmebot__CustomDns__ApiKey', variables('customDns').apiKey, 'Acmebot__CustomDns__ApiKeyHeaderName', coalesce(tryGet(variables('customDns'), 'apiKeyHeaderName'), 'X-Api-Key'), 'Acmebot__CustomDns__PropagationSeconds', string(coalesce(tryGet(variables('customDns'), 'propagationSeconds'), 180)))), if(empty(coalesce(variables('dnsMadeEasy'), createObject())), createObject(), createObject('Acmebot__DnsMadeEasy__ApiKey', variables('dnsMadeEasy').apiKey, 'Acmebot__DnsMadeEasy__SecretKey', variables('dnsMadeEasy').secretKey)), if(empty(coalesce(variables('gandiLiveDns'), createObject())), createObject(), createObject('Acmebot__GandiLiveDns__ApiKey', variables('gandiLiveDns').apiKey)), if(empty(coalesce(variables('goDaddy'), createObject())), createObject(), createObject('Acmebot__GoDaddy__ApiKey', variables('goDaddy').apiKey, 'Acmebot__GoDaddy__ApiSecret', variables('goDaddy').apiSecret)), if(empty(coalesce(variables('googleDns'), createObject())), createObject(), createObject('Acmebot__GoogleDns__KeyFile64', variables('googleDns').keyFile64)), if(empty(coalesce(variables('ionosDns'), createObject())), createObject(), createObject('Acmebot__IonosDns__ApiKey', variables('ionosDns').apiKey)), if(empty(coalesce(variables('ovh'), createObject())), createObject(), createObject('Acmebot__Ovh__Endpoint', coalesce(tryGet(variables('ovh'), 'endpoint'), 'https://eu.api.ovh.com/1.0/'), 'Acmebot__Ovh__ApplicationKey', variables('ovh').applicationKey, 'Acmebot__Ovh__ApplicationSecret', variables('ovh').applicationSecret, 'Acmebot__Ovh__ConsumerKey', variables('ovh').consumerKey)), if(empty(coalesce(variables('powerDns'), createObject())), createObject(), createObject('Acmebot__PowerDns__Endpoint', variables('powerDns').endpoint, 'Acmebot__PowerDns__ApiKey', variables('powerDns').apiKey, 'Acmebot__PowerDns__ServerId', coalesce(tryGet(variables('powerDns'), 'serverId'), 'localhost'))), if(empty(coalesce(variables('regfish'), createObject())), createObject(), createObject('Acmebot__Regfish__ApiKey', variables('regfish').apiKey)), if(empty(coalesce(variables('route53'), createObject())), createObject(), createObject('Acmebot__Route53__AccessKey', variables('route53').accessKey, 'Acmebot__Route53__SecretKey', variables('route53').secretKey, 'Acmebot__Route53__Region', coalesce(tryGet(variables('route53'), 'region'), 'us-east-1'))), if(empty(coalesce(variables('transIp'), createObject())), createObject(), createObject('Acmebot__TransIp__CustomerName', variables('transIp').customerName, 'Acmebot__TransIp__PrivateKeyName', variables('transIp').privateKeyName)), if(empty(coalesce(variables('unitedDomains'), createObject())), createObject(), createObject('Acmebot__UnitedDomains__ApiKey', variables('unitedDomains').apiKey)), if(empty(coalesce(variables('webhookUrl'), '')), createObject(), createObject('Acmebot__Webhook', variables('webhookUrl'))), if(empty(coalesce(variables('preferredChain'), '')), createObject(), createObject('Acmebot__PreferredChain', variables('preferredChain'))), if(empty(coalesce(variables('preferredProfile'), '')), createObject(), createObject('Acmebot__PreferredProfile', variables('preferredProfile'))), if(empty(coalesce(variables('acmebotManagedIdentityClientId'), '')), createObject(), createObject('Acmebot__ManagedIdentityClientId', variables('acmebotManagedIdentityClientId'))))]",
     "authConfigured": "[not(equals(parameters('authSettings'), null()))]",
     "authAppSettings": "[if(not(variables('authConfigured')), createObject(), createObject('MICROSOFT_PROVIDER_AUTHENTICATION_SECRET', parameters('authSettings').activeDirectory.clientSecret))]",
-    "userContainers": "[coalesce(tryGet(tryGet(parameters('storageAccount'), 'blobServices'), 'containers'), createArray())]",
-    "hasDeploymentContainer": "[not(empty(filter(variables('userContainers'), lambda('c', equals(lambdaVariables('c').name, variables('deploymentContainerName'))))))]",
     "storageAccountReplication": "[coalesce(tryGet(parameters('storageAccount'), 'accountReplicationType'), 'LRS')]",
     "storageAccountDefaultSkuName": "[if(equals(variables('storageAccountReplication'), 'GRS'), 'Standard_GRS', if(equals(variables('storageAccountReplication'), 'RAGRS'), 'Standard_RAGRS', if(equals(variables('storageAccountReplication'), 'ZRS'), 'Standard_ZRS', if(equals(variables('storageAccountReplication'), 'GZRS'), 'Standard_GZRS', if(equals(variables('storageAccountReplication'), 'RAGZRS'), 'Standard_RAGZRS', 'Standard_LRS')))))]",
-    "storageAccountSkuName": "[coalesce(tryGet(parameters('storageAccount'), 'skuName'), variables('storageAccountDefaultSkuName'))]",
+    "storageAccountSkuName": "[variables('storageAccountDefaultSkuName')]",
     "functionAppSiteConfig": "[union(createObject('minTlsVersion', '1.2', 'scmMinTlsVersion', '1.2', 'ftpsState', 'Disabled', 'scmIpSecurityRestrictionsUseMain', variables('siteConfigScmUseMainIpRestriction'), 'vnetRouteAllEnabled', variables('siteConfigVnetRouteAllEnabled'), 'ipSecurityRestrictionsDefaultAction', variables('siteConfigIpRestrictionDefaultAction'), 'scmIpSecurityRestrictionsDefaultAction', variables('siteConfigScmIpRestrictionDefaultAction')), parameters('siteConfig'))]",
     "systemAssignedEnabled": "[coalesce(tryGet(parameters('managedIdentities'), 'systemAssigned'), true())]",
     "storageUserAssignedIdentityResourceId": "[coalesce(tryGet(parameters('storageManagedIdentity'), 'userAssignedResourceId'), '')]",
@@ -1703,7 +1455,7 @@
             "value": "[parameters('location')]"
           },
           "kind": {
-            "value": "[coalesce(tryGet(parameters('storageAccount'), 'kind'), 'StorageV2')]"
+            "value": "StorageV2"
           },
           "skuName": {
             "value": "[variables('storageAccountSkuName')]"
@@ -1727,17 +1479,11 @@
             "value": "[variables('storagePublicNetworkAccess')]"
           },
           "blobServices": {
-            "value": "[union(union(createObject('changeFeedEnabled', true(), 'changeFeedRetentionInDays', 30, 'containerDeleteRetentionPolicyEnabled', true(), 'containerDeleteRetentionPolicyDays', 30, 'deleteRetentionPolicyEnabled', true(), 'deleteRetentionPolicyDays', 30, 'isVersioningEnabled', true()), if(parameters('managedDiagnosticSettingsEnabled'), createObject('diagnosticSettings', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'logCategoriesAndGroups', createArray(createObject('category', 'StorageRead'), createObject('category', 'StorageWrite'), createObject('category', 'StorageDelete')), 'metricCategories', createArray(createObject('category', 'Transaction'))))), createObject())), coalesce(tryGet(parameters('storageAccount'), 'blobServices'), createObject()), createObject('containers', if(variables('hasDeploymentContainer'), variables('userContainers'), concat(variables('userContainers'), createArray(createObject('name', variables('deploymentContainerName'), 'publicAccess', 'None'))))))]"
+            "value": "[union(union(createObject('changeFeedEnabled', true(), 'changeFeedRetentionInDays', 30, 'containerDeleteRetentionPolicyEnabled', true(), 'containerDeleteRetentionPolicyDays', 30, 'deleteRetentionPolicyEnabled', true(), 'deleteRetentionPolicyDays', 30, 'isVersioningEnabled', true()), if(parameters('managedDiagnosticSettingsEnabled'), createObject('diagnosticSettings', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'logCategoriesAndGroups', createArray(createObject('category', 'StorageRead'), createObject('category', 'StorageWrite'), createObject('category', 'StorageDelete')), 'metricCategories', createArray(createObject('category', 'Transaction'))))), createObject())), coalesce(tryGet(parameters('storageAccount'), 'blobServices'), createObject()), createObject('containers', createArray(createObject('name', variables('deploymentContainerName'), 'publicAccess', 'None'))))]"
           },
-          "queueServices": {
-            "value": "[union(if(parameters('managedDiagnosticSettingsEnabled'), createObject('diagnosticSettings', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'logCategoriesAndGroups', createArray(createObject('category', 'StorageRead'), createObject('category', 'StorageWrite'), createObject('category', 'StorageDelete')), 'metricCategories', createArray(createObject('category', 'Transaction'))))), createObject()), coalesce(tryGet(parameters('storageAccount'), 'queueServices'), createObject()))]"
-          },
-          "tableServices": {
-            "value": "[union(if(parameters('managedDiagnosticSettingsEnabled'), createObject('diagnosticSettings', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'logCategoriesAndGroups', createArray(createObject('category', 'StorageRead'), createObject('category', 'StorageWrite'), createObject('category', 'StorageDelete')), 'metricCategories', createArray(createObject('category', 'Transaction'))))), createObject()), coalesce(tryGet(parameters('storageAccount'), 'tableServices'), createObject()))]"
-          },
-          "diagnosticSettings": {
-            "value": "[coalesce(tryGet(parameters('storageAccount'), 'diagnosticSettings'), if(parameters('managedDiagnosticSettingsEnabled'), createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'metricCategories', createArray(createObject('category', 'Transaction')))), createArray()))]"
-          },
+          "queueServices": "[if(parameters('managedDiagnosticSettingsEnabled'), createObject('value', createObject('diagnosticSettings', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'logCategoriesAndGroups', createArray(createObject('category', 'StorageRead'), createObject('category', 'StorageWrite'), createObject('category', 'StorageDelete')), 'metricCategories', createArray(createObject('category', 'Transaction')))))), createObject('value', createObject()))]",
+          "tableServices": "[if(parameters('managedDiagnosticSettingsEnabled'), createObject('value', createObject('diagnosticSettings', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'logCategoriesAndGroups', createArray(createObject('category', 'StorageRead'), createObject('category', 'StorageWrite'), createObject('category', 'StorageDelete')), 'metricCategories', createArray(createObject('category', 'Transaction')))))), createObject('value', createObject()))]",
+          "diagnosticSettings": "[if(parameters('managedDiagnosticSettingsEnabled'), createObject('value', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'metricCategories', createArray(createObject('category', 'Transaction'))))), createObject('value', createArray()))]",
           "privateEndpoints": {
             "value": "[parameters('storageAccountPrivateEndpoints')]"
           },
@@ -9883,13 +9629,13 @@
             "value": "[parameters('location')]"
           },
           "kind": {
-            "value": "[coalesce(tryGet(parameters('servicePlan'), 'kind'), 'functionapp')]"
+            "value": "functionapp"
           },
           "reserved": {
             "value": true
           },
           "skuName": {
-            "value": "[coalesce(tryGet(parameters('servicePlan'), 'skuName'), 'FC1')]"
+            "value": "FC1"
           },
           "zoneRedundant": {
             "value": "[coalesce(tryGet(parameters('servicePlan'), 'zoneRedundant'), false())]"
@@ -14713,7 +14459,7 @@
             }
           },
           "configs": {
-            "value": "[concat(createArray(createObject('name', 'appsettings', 'retainCurrentAppSettings', false(), 'properties', union(parameters('additionalAppSettings'), createObject('APPLICATIONINSIGHTS_CONNECTION_STRING', if(variables('createApplicationInsights'), reference('insights').outputs.connectionString.value, reference('existingApplicationInsights').ConnectionString), 'APPINSIGHTS_INSTRUMENTATIONKEY', if(variables('createApplicationInsights'), reference('insights').outputs.instrumentationKey.value, reference('existingApplicationInsights').InstrumentationKey)), union(createObject('AzureWebJobsStorage__credential', 'managedidentity', 'AzureWebJobsStorage__blobServiceUri', reference('storage').outputs.serviceEndpoints.value.blob, 'AzureWebJobsStorage__queueServiceUri', reference('storage').outputs.serviceEndpoints.value.queue, 'AzureWebJobsStorage__tableServiceUri', reference('storage').outputs.serviceEndpoints.value.table), if(variables('storageUsesUserAssignedIdentity'), createObject('AzureWebJobsStorage__clientId', if(variables('storageUsesUserAssignedIdentity'), reference('uamiLookup').outputs.clientId.value, '')), createObject())), variables('acmebotAppSettings'), variables('authAppSettings')))), if(equals(variables('authSettingsV2'), null()), createArray(), createArray(variables('authSettingsV2'))), parameters('configs'))]"
+            "value": "[concat(createArray(createObject('name', 'appsettings', 'retainCurrentAppSettings', false(), 'properties', union(parameters('additionalAppSettings'), createObject('APPLICATIONINSIGHTS_CONNECTION_STRING', if(variables('createApplicationInsights'), reference('insights').outputs.connectionString.value, reference('existingApplicationInsights').ConnectionString), 'APPINSIGHTS_INSTRUMENTATIONKEY', if(variables('createApplicationInsights'), reference('insights').outputs.instrumentationKey.value, reference('existingApplicationInsights').InstrumentationKey)), union(createObject('AzureWebJobsStorage__credential', 'managedidentity', 'AzureWebJobsStorage__blobServiceUri', reference('storage').outputs.serviceEndpoints.value.blob, 'AzureWebJobsStorage__queueServiceUri', reference('storage').outputs.serviceEndpoints.value.queue, 'AzureWebJobsStorage__tableServiceUri', reference('storage').outputs.serviceEndpoints.value.table), if(variables('storageUsesUserAssignedIdentity'), createObject('AzureWebJobsStorage__clientId', if(variables('storageUsesUserAssignedIdentity'), reference('uamiLookup').outputs.clientId.value, '')), createObject())), variables('acmebotAppSettings'), variables('authAppSettings')))), if(equals(variables('authSettingsV2'), null()), createArray(), createArray(variables('authSettingsV2'))))]"
           },
           "diagnosticSettings": "[if(and(parameters('managedDiagnosticSettingsEnabled'), empty(parameters('diagnosticSettings'))), createObject('value', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId))))), createObject('value', parameters('diagnosticSettings')))]",
           "privateEndpoints": {
