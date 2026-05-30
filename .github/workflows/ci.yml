@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  BICEP_VERSION: "0.43.8"
+
+jobs:
+  bicep-fmt:
+    name: Bicep format
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+    - name: Install Bicep CLI
+      run: |
+        mkdir -p "$HOME/.local/bin"
+        curl -fsSLo "$HOME/.local/bin/bicep" "https://github.com/Azure/bicep/releases/download/v${BICEP_VERSION}/bicep-linux-x64"
+        chmod +x "$HOME/.local/bin/bicep"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        "$HOME/.local/bin/bicep" --version
+
+    - name: Check Bicep formatting
+      shell: bash
+      run: |
+        failed=0
+
+        while IFS= read -r file; do
+          formatted="$RUNNER_TEMP/$(echo "$file" | tr '/\\' '__').formatted"
+
+          bicep format "$file" --stdout > "$formatted"
+
+          if ! diff -u "$file" "$formatted"; then
+            echo "::error file=$file::Bicep formatting differs. Run 'bicep format $file' and commit the result."
+            failed=1
+          fi
+        done < <(git ls-files '*.bicep' '*.bicepparam')
+
+        exit "$failed"
+
+  bicep-build:
+    name: Bicep build (${{ matrix.file }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        file:
+        - main.bicep
+        - modules/storage-role-assignments.bicep
+        - modules/uami-lookup.bicep
+        - tests/e2e/defaults/main.test.bicep
+        - tests/e2e/uami-only/main.test.bicep
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+    - name: Install Bicep CLI
+      run: |
+        mkdir -p "$HOME/.local/bin"
+        curl -fsSLo "$HOME/.local/bin/bicep" "https://github.com/Azure/bicep/releases/download/v${BICEP_VERSION}/bicep-linux-x64"
+        chmod +x "$HOME/.local/bin/bicep"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        "$HOME/.local/bin/bicep" --version
+
+    - name: Build Bicep file
+      run: bicep build "${{ matrix.file }}" --stdout > /dev/null
+
+  bicep-params:
+    name: Bicep parameters (${{ matrix.file }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        file:
+        - examples/main.bicepparam
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+    - name: Install Bicep CLI
+      run: |
+        mkdir -p "$HOME/.local/bin"
+        curl -fsSLo "$HOME/.local/bin/bicep" "https://github.com/Azure/bicep/releases/download/v${BICEP_VERSION}/bicep-linux-x64"
+        chmod +x "$HOME/.local/bin/bicep"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        "$HOME/.local/bin/bicep" --version
+
+    - name: Build Bicep parameters file
+      run: bicep build-params "${{ matrix.file }}" --stdout > /dev/null
+
+  generated-template:
+    name: Generated ARM template
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+    - name: Install Bicep CLI
+      run: |
+        mkdir -p "$HOME/.local/bin"
+        curl -fsSLo "$HOME/.local/bin/bicep" "https://github.com/Azure/bicep/releases/download/v${BICEP_VERSION}/bicep-linux-x64"
+        chmod +x "$HOME/.local/bin/bicep"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        "$HOME/.local/bin/bicep" --version
+
+    - name: Generate ARM template
+      run: bicep build main.bicep
+
+    - name: Check generated ARM template
+      run: git diff --exit-code -- main.json

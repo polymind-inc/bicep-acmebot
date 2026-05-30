@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "749735128829468863"
+      "templateHash": "6972742651308341283"
     },
     "name": "Azure Acmebot",
     "description": "Deploys Azure Acmebot on Azure Functions Flex Consumption using AVM-aligned conventions and published Bicep modules."
@@ -1287,6 +1287,28 @@
     }
   },
   "variables": {
+    "copy": [
+      {
+        "name": "functionPrivateEndpointServices",
+        "count": "[length(parameters('privateEndpoints'))]",
+        "input": "[toLower(parameters('privateEndpoints')[copyIndex('functionPrivateEndpointServices')].service)]"
+      },
+      {
+        "name": "storagePrivateEndpointServices",
+        "count": "[length(parameters('storageAccountPrivateEndpoints'))]",
+        "input": "[toLower(parameters('storageAccountPrivateEndpoints')[copyIndex('storagePrivateEndpointServices')].service)]"
+      },
+      {
+        "name": "storagePrivateEndpointSubnetResourceIds",
+        "count": "[length(parameters('storageAccountPrivateEndpoints'))]",
+        "input": "[toLower(parameters('storageAccountPrivateEndpoints')[copyIndex('storagePrivateEndpointSubnetResourceIds')].subnetResourceId)]"
+      },
+      {
+        "name": "attachedUserAssignedIdentityResourceIds",
+        "count": "[length(coalesce(tryGet(parameters('managedIdentities'), 'userAssignedResourceIds'), createArray()))]",
+        "input": "[toLower(coalesce(tryGet(parameters('managedIdentities'), 'userAssignedResourceIds'), createArray())[copyIndex('attachedUserAssignedIdentityResourceIds')])]"
+      }
+    ],
     "functionAppName": "[parameters('name')]",
     "resourceTags": "[parameters('tags')]",
     "subscriptionId": "[subscription().subscriptionId]",
@@ -1294,6 +1316,11 @@
     "subscriptionRootResourceId": "[subscription().id]",
     "functionPublicNetworkAccess": "[coalesce(parameters('publicNetworkAccess'), 'Disabled')]",
     "storagePublicNetworkAccess": "[coalesce(tryGet(parameters('storageAccount'), 'publicNetworkAccess'), 'Disabled')]",
+    "validatedPrivateEndpoints": "[if(or(equals(variables('functionPublicNetworkAccess'), 'Enabled'), contains(variables('functionPrivateEndpointServices'), 'sites')), parameters('privateEndpoints'), fail('privateEndpoints must include a sites endpoint when publicNetworkAccess is Disabled or unset.'))]",
+    "storagePrivateEndpointsWithRequiredServices": "[if(or(equals(variables('storagePublicNetworkAccess'), 'Enabled'), and(and(contains(variables('storagePrivateEndpointServices'), 'blob'), contains(variables('storagePrivateEndpointServices'), 'queue')), contains(variables('storagePrivateEndpointServices'), 'table'))), parameters('storageAccountPrivateEndpoints'), fail('storageAccountPrivateEndpoints must include blob, queue, and table endpoints when storageAccount.publicNetworkAccess is Disabled, SecuredByPerimeter, or unset.'))]",
+    "storagePrivateEndpointsRequireVnetIntegration": "[if(or(empty(variables('storagePrivateEndpointsWithRequiredServices')), not(equals(parameters('virtualNetworkSubnetId'), null()))), variables('storagePrivateEndpointsWithRequiredServices'), fail('virtualNetworkSubnetId must be set when storageAccountPrivateEndpoints is set so the Function App can route Storage Account traffic through the virtual network.'))]",
+    "storagePrivateEndpointsRequiredForVnetIntegration": "[if(or(equals(parameters('virtualNetworkSubnetId'), null()), not(empty(variables('storagePrivateEndpointsRequireVnetIntegration')))), variables('storagePrivateEndpointsRequireVnetIntegration'), fail('storageAccountPrivateEndpoints must be set when virtualNetworkSubnetId is set so the Function App can access its Storage Account through Private Endpoint.'))]",
+    "validatedStorageAccountPrivateEndpoints": "[if(or(equals(parameters('virtualNetworkSubnetId'), null()), not(contains(variables('storagePrivateEndpointSubnetResourceIds'), toLower(coalesce(parameters('virtualNetworkSubnetId'), ''))))), variables('storagePrivateEndpointsRequiredForVnetIntegration'), fail('storageAccountPrivateEndpoints[*].subnetResourceId must be different from virtualNetworkSubnetId because the Flex Consumption VNET integration subnet cannot be used for private endpoints.'))]",
     "siteConfigIpRestrictionDefaultAction": "[coalesce(tryGet(parameters('siteConfig'), 'ipSecurityRestrictionsDefaultAction'), 'Deny')]",
     "siteConfigScmIpRestrictionDefaultAction": "[coalesce(tryGet(parameters('siteConfig'), 'scmIpSecurityRestrictionsDefaultAction'), 'Deny')]",
     "siteConfigScmUseMainIpRestriction": "[coalesce(tryGet(parameters('siteConfig'), 'scmIpSecurityRestrictionsUseMain'), true())]",
@@ -1326,9 +1353,13 @@
     "functionAppDeploymentName": "[take(format('acmebot-{0}-site', uniqueString(variables('functionAppResourceId'), parameters('location'))), 64)]",
     "createLogAnalyticsWorkspace": "[and(empty(variables('logAnalyticsWorkspaceResourceIdInput')), empty(variables('applicationInsightsResourceIdInput')))]",
     "createApplicationInsights": "[empty(variables('applicationInsightsResourceIdInput'))]",
-    "acmebotMajorVersion": "[format('v{0}', split(parameters('acmebot').version, '.')[0])]",
-    "acmebotPackageUri": "[format('https://stacmebotprod.blob.core.windows.net/acmebot/{0}/{1}.zip', variables('acmebotMajorVersion'), parameters('acmebot').version)]",
-    "dnsProviders": "[coalesce(tryGet(parameters('acmebot'), 'dnsProviders'), createObject())]",
+    "acmebotVersionSegments": "[split(parameters('acmebot').version, '.')]",
+    "acmebotVersion": "[if(and(greaterOrEquals(length(variables('acmebotVersionSegments')), 3), greaterOrEquals(int(variables('acmebotVersionSegments')[0]), 5)), parameters('acmebot').version, fail('acmebot.version must be a Semantic Versioning 2.0.0 version with major version 5 or greater.'))]",
+    "acmebotMajorVersion": "[format('v{0}', split(variables('acmebotVersion'), '.')[0])]",
+    "acmebotPackageUri": "[format('https://stacmebotprod.blob.core.windows.net/acmebot/{0}/{1}.zip', variables('acmebotMajorVersion'), variables('acmebotVersion'))]",
+    "dnsProvidersInput": "[coalesce(tryGet(parameters('acmebot'), 'dnsProviders'), createObject())]",
+    "dnsProviderConfigured": "[or(or(or(or(or(or(or(or(or(or(or(or(or(or(or(not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'akamai'), createObject()))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'azureDns'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'azurePrivateDns'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'cloudflare'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'customDns'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'dnsMadeEasy'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'gandiLiveDns'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'goDaddy'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'googleDns'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'ionosDns'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'ovh'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'powerDns'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'regfish'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'route53'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'transIp'), createObject())))), not(empty(coalesce(tryGet(variables('dnsProvidersInput'), 'unitedDomains'), createObject()))))]",
+    "dnsProviders": "[if(variables('dnsProviderConfigured'), variables('dnsProvidersInput'), fail('At least one acmebot.dnsProviders entry must be configured.'))]",
     "akamai": "[coalesce(tryGet(variables('dnsProviders'), 'akamai'), null())]",
     "azureDns": "[coalesce(tryGet(variables('dnsProviders'), 'azureDns'), null())]",
     "azurePrivateDns": "[coalesce(tryGet(variables('dnsProviders'), 'azurePrivateDns'), null())]",
@@ -1349,9 +1380,14 @@
     "webhookUrl": "[coalesce(tryGet(parameters('acmebot'), 'webhookUrl'), null())]",
     "preferredChain": "[coalesce(tryGet(parameters('acmebot'), 'preferredChain'), null())]",
     "preferredProfile": "[coalesce(tryGet(parameters('acmebot'), 'preferredProfile'), null())]",
-    "acmebotManagedIdentityClientId": "[coalesce(tryGet(parameters('acmebot'), 'managedIdentityClientId'), null())]",
+    "acmebotManagedIdentityClientIdInput": "[coalesce(tryGet(parameters('acmebot'), 'managedIdentityClientId'), '')]",
     "acmebotEnvironment": "[coalesce(tryGet(parameters('acmebot'), 'environment'), 'AzureCloud')]",
     "acmebotUseSystemNameServer": "[coalesce(tryGet(parameters('acmebot'), 'useSystemNameServer'), or(not(equals(parameters('virtualNetworkSubnetId'), null())), not(equals(variables('acmebotEnvironment'), 'AzureCloud'))))]",
+    "systemAssignedEnabled": "[coalesce(tryGet(parameters('managedIdentities'), 'systemAssigned'), true())]",
+    "storageUserAssignedIdentityResourceIdInput": "[coalesce(tryGet(parameters('storageManagedIdentity'), 'userAssignedResourceId'), '')]",
+    "storageUsesUserAssignedIdentity": "[not(empty(variables('storageUserAssignedIdentityResourceIdInput')))]",
+    "storageUserAssignedIdentityResourceId": "[if(or(variables('systemAssignedEnabled'), variables('storageUsesUserAssignedIdentity')), if(or(not(variables('storageUsesUserAssignedIdentity')), contains(variables('attachedUserAssignedIdentityResourceIds'), toLower(variables('storageUserAssignedIdentityResourceIdInput')))), variables('storageUserAssignedIdentityResourceIdInput'), fail('storageManagedIdentity.userAssignedResourceId must also be attached through managedIdentities.userAssignedResourceIds.')), fail('storageManagedIdentity.userAssignedResourceId must be set when managedIdentities.systemAssigned is false.'))]",
+    "acmebotManagedIdentityClientId": "[if(or(variables('systemAssignedEnabled'), not(empty(variables('acmebotManagedIdentityClientIdInput')))), if(or(empty(variables('acmebotManagedIdentityClientIdInput')), not(empty(variables('attachedUserAssignedIdentityResourceIds')))), variables('acmebotManagedIdentityClientIdInput'), fail('acmebot.managedIdentityClientId can only be set when at least one user-assigned managed identity is attached through managedIdentities.userAssignedResourceIds.')), fail('acmebot.managedIdentityClientId must be set when managedIdentities.systemAssigned is false so Acmebot can use an attached user-assigned managed identity.'))]",
     "acmebotCommonAppSettings": {
       "Acmebot__Contacts": "[parameters('acmebot').mailAddress]",
       "Acmebot__Endpoint": "[coalesce(tryGet(parameters('acmebot'), 'acmeEndpoint'), 'https://acme-v02.api.letsencrypt.org/directory')]",
@@ -1368,11 +1404,8 @@
     "storageAccountDefaultSkuName": "[if(equals(variables('storageAccountReplication'), 'GRS'), 'Standard_GRS', if(equals(variables('storageAccountReplication'), 'RAGRS'), 'Standard_RAGRS', if(equals(variables('storageAccountReplication'), 'ZRS'), 'Standard_ZRS', if(equals(variables('storageAccountReplication'), 'GZRS'), 'Standard_GZRS', if(equals(variables('storageAccountReplication'), 'RAGZRS'), 'Standard_RAGZRS', 'Standard_LRS')))))]",
     "storageAccountSkuName": "[variables('storageAccountDefaultSkuName')]",
     "functionAppSiteConfig": "[union(createObject('minTlsVersion', '1.2', 'scmMinTlsVersion', '1.2', 'ftpsState', 'Disabled', 'scmIpSecurityRestrictionsUseMain', variables('siteConfigScmUseMainIpRestriction'), 'vnetRouteAllEnabled', variables('siteConfigVnetRouteAllEnabled'), 'ipSecurityRestrictionsDefaultAction', variables('siteConfigIpRestrictionDefaultAction'), 'scmIpSecurityRestrictionsDefaultAction', variables('siteConfigScmIpRestrictionDefaultAction')), parameters('siteConfig'))]",
-    "systemAssignedEnabled": "[coalesce(tryGet(parameters('managedIdentities'), 'systemAssigned'), true())]",
-    "storageUserAssignedIdentityResourceId": "[coalesce(tryGet(parameters('storageManagedIdentity'), 'userAssignedResourceId'), '')]",
-    "storageUsesUserAssignedIdentity": "[not(empty(variables('storageUserAssignedIdentityResourceId')))]",
     "storageAuthenticationType": "[if(variables('storageUsesUserAssignedIdentity'), 'UserAssignedIdentity', 'SystemAssignedIdentity')]",
-    "storageIdentityConfigured": "[or(variables('storageUsesUserAssignedIdentity'), variables('systemAssignedEnabled'))]",
+    "storageIdentityConfigured": "[or(not(empty(variables('storageUserAssignedIdentityResourceId'))), variables('systemAssignedEnabled'))]",
     "deploymentStorageAuthentication": "[if(variables('storageUsesUserAssignedIdentity'), createObject('type', variables('storageAuthenticationType'), 'userAssignedIdentityResourceId', variables('storageUserAssignedIdentityResourceId')), createObject('type', variables('storageAuthenticationType')))]",
     "authSettingsV2": "[if(not(variables('authConfigured')), null(), createObject('name', 'authsettingsV2', 'properties', createObject('platform', createObject('enabled', parameters('authSettings').enabled, 'runtimeVersion', '~1'), 'globalValidation', createObject('requireAuthentication', parameters('authSettings').enabled, 'unauthenticatedClientAction', 'RedirectToLoginPage', 'redirectToProvider', 'azureactivedirectory'), 'identityProviders', createObject('azureActiveDirectory', createObject('enabled', true(), 'registration', createObject('clientId', parameters('authSettings').activeDirectory.clientId, 'clientSecretSettingName', 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET', 'openIdIssuer', parameters('authSettings').activeDirectory.tenantAuthEndpoint))), 'login', createObject('tokenStore', createObject('enabled', false())))))]",
     "storageRoleDefinitionIds": {
@@ -1396,33 +1429,6 @@
       "type": "Microsoft.Web/sites",
       "apiVersion": "2025-03-01",
       "name": "[variables('functionAppName')]"
-    },
-    "storageAccountRef": {
-      "existing": true,
-      "type": "Microsoft.Storage/storageAccounts",
-      "apiVersion": "2024-01-01",
-      "name": "[variables('storageAccountName')]"
-    },
-    "siteStorageRoleAssignments": {
-      "copy": {
-        "name": "siteStorageRoleAssignments",
-        "count": "[length(items(variables('storageRoleDefinitionIds')))]"
-      },
-      "condition": "[variables('storageIdentityConfigured')]",
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
-      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), items(variables('storageRoleDefinitionIds'))[copyIndex()].key, if(variables('storageUsesUserAssignedIdentity'), variables('storageUserAssignedIdentityResourceId'), variables('functionAppName')))]",
-      "properties": {
-        "principalId": "[if(variables('storageUsesUserAssignedIdentity'), reference('uamiLookup').outputs.principalId.value, coalesce(tryGet(tryGet(reference('site').outputs, 'systemAssignedMIPrincipalId'), 'value'), ''))]",
-        "roleDefinitionId": "[items(variables('storageRoleDefinitionIds'))[copyIndex()].value]",
-        "principalType": "ServicePrincipal"
-      },
-      "dependsOn": [
-        "site",
-        "storage",
-        "uamiLookup"
-      ]
     },
     "packageDeployment": {
       "type": "Microsoft.Web/sites/extensions",
@@ -1485,7 +1491,7 @@
           "tableServices": "[if(parameters('managedDiagnosticSettingsEnabled'), createObject('value', createObject('diagnosticSettings', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'logCategoriesAndGroups', createArray(createObject('category', 'StorageRead'), createObject('category', 'StorageWrite'), createObject('category', 'StorageDelete')), 'metricCategories', createArray(createObject('category', 'Transaction')))))), createObject('value', createObject()))]",
           "diagnosticSettings": "[if(parameters('managedDiagnosticSettingsEnabled'), createObject('value', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'metricCategories', createArray(createObject('category', 'Transaction'))))), createObject('value', createArray()))]",
           "privateEndpoints": {
-            "value": "[parameters('storageAccountPrivateEndpoints')]"
+            "value": "[variables('validatedStorageAccountPrivateEndpoints')]"
           },
           "networkAcls": {
             "value": "[tryGet(parameters('storageAccount'), 'networkAcls')]"
@@ -14463,7 +14469,7 @@
           },
           "diagnosticSettings": "[if(and(parameters('managedDiagnosticSettingsEnabled'), empty(parameters('diagnosticSettings'))), createObject('value', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId))))), createObject('value', parameters('diagnosticSettings')))]",
           "privateEndpoints": {
-            "value": "[parameters('privateEndpoints')]"
+            "value": "[variables('validatedPrivateEndpoints')]"
           },
           "roleAssignments": {
             "value": "[parameters('roleAssignments')]"
@@ -29121,6 +29127,80 @@
           }
         }
       }
+    },
+    "siteStorageRoleAssignments": {
+      "condition": "[variables('storageIdentityConfigured')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[take(format('acmebot-{0}-storage-rbac', uniqueString(variables('storageAccountResourceId'), parameters('location'))), 64)]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "storageAccountName": {
+            "value": "[variables('storageAccountName')]"
+          },
+          "principalId": "[if(variables('storageUsesUserAssignedIdentity'), createObject('value', reference('uamiLookup').outputs.principalId.value), createObject('value', coalesce(tryGet(tryGet(reference('site').outputs, 'systemAssignedMIPrincipalId'), 'value'), '')))]",
+          "roleDefinitionIds": {
+            "value": "[variables('storageRoleDefinitionIds')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "4252093632880769518"
+            }
+          },
+          "parameters": {
+            "storageAccountName": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. The Storage Account name that receives role assignments."
+              }
+            },
+            "principalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Required. The principal ID to assign Storage data-plane roles to."
+              }
+            },
+            "roleDefinitionIds": {
+              "type": "object",
+              "metadata": {
+                "description": "Required. Role definition resource IDs keyed by stable assignment names."
+              }
+            }
+          },
+          "resources": [
+            {
+              "copy": {
+                "name": "roleAssignments",
+                "count": "[length(items(parameters('roleDefinitionIds')))]"
+              },
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), items(parameters('roleDefinitionIds'))[copyIndex()].key, parameters('principalId'))]",
+              "properties": {
+                "principalId": "[parameters('principalId')]",
+                "roleDefinitionId": "[items(parameters('roleDefinitionIds'))[copyIndex()].value]",
+                "principalType": "ServicePrincipal"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "site",
+        "storage",
+        "uamiLookup"
+      ]
     }
   },
   "outputs": {
