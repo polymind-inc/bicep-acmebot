@@ -15,16 +15,27 @@ It deploys:
 
 ## Usage
 
-Deploy to an existing resource group:
+Create a resource group, then deploy the default example:
 
 ```powershell
+az group create `
+  --name rg-acmebot `
+  --location westus2
+
 az deployment group create `
   --resource-group rg-acmebot `
-  --template-file .\main.bicep `
-  --parameters .\examples\main.bicepparam
+  --template-file .\examples\default\main.bicep
 ```
 
-Example parameter shape:
+Runnable examples are available under [`examples`](examples):
+
+- [`default`](examples/default) - A public quickstart with minimal networking, a system-assigned managed identity, a Key Vault target, and Azure DNS.
+- [`complete`](examples/complete) - A fully private deployment with VNET integration, Function App and Storage Account Private Endpoints, private DNS, a user-assigned managed identity, and a resource lock.
+
+Both examples are resource group-scoped. Create the target resource group before running `az deployment group create`.
+Example settings such as `mailAddress` are assigned directly in each example `main.bicep`; edit those inline values when you need different sample values.
+
+To consume the module from another Bicep deployment, use this parameter shape:
 
 ```bicep
 param location = 'japaneast'
