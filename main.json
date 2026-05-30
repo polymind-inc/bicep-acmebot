@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "10613947895262816861"
+      "templateHash": "136581172976868971"
     },
     "name": "Azure Acmebot",
     "description": "Deploys Azure Acmebot on Azure Functions Flex Consumption using AVM-aligned conventions and published Bicep modules."
@@ -1492,7 +1492,7 @@
       "minValue": 1,
       "maxValue": 1000,
       "metadata": {
-        "description": "Optional. Maximum scale-out instance count for the Function App."
+        "description": "Optional. Maximum scale-out instance count for the Function App. Defaults to 10."
       }
     },
     "instanceMemoryInMb": {
@@ -1546,10 +1546,14 @@
     "siteConfigVnetRouteAllEnabled": "[coalesce(tryGet(parameters('siteConfig'), 'vnetRouteAllEnabled'), not(equals(parameters('virtualNetworkSubnetId'), null())))]",
     "normalizedFunctionName": "[toLower(variables('functionAppName'))]",
     "sanitizedFunctionName": "[replace(replace(replace(variables('normalizedFunctionName'), '-', ''), '_', ''), '.', '')]",
-    "sanitizedContainerName": "[replace(replace(variables('normalizedFunctionName'), '_', '-'), '.', '-')]",
+    "containerNameCleaned": "[replace(replace(variables('normalizedFunctionName'), '_', ''), '.', '')]",
+    "containerNameCollapsed": "[replace(replace(replace(replace(replace(variables('containerNameCleaned'), '--', '-'), '--', '-'), '--', '-'), '--', '-'), '--', '-')]",
+    "containerNameTruncated": "[take(variables('containerNameCollapsed'), 43)]",
+    "containerNameNoLeadingHyphen": "[if(startsWith(variables('containerNameTruncated'), '-'), substring(variables('containerNameTruncated'), 1), variables('containerNameTruncated'))]",
+    "sanitizedContainerName": "[if(endsWith(variables('containerNameNoLeadingHyphen'), '-'), substring(variables('containerNameNoLeadingHyphen'), 0, max(sub(length(variables('containerNameNoLeadingHyphen')), 1), 0)), variables('containerNameNoLeadingHyphen'))]",
     "uniqueToken": "[uniqueString(variables('subscriptionId'), variables('resourceGroupName'), variables('functionAppName'))]",
     "storageAccountName": "[coalesce(tryGet(parameters('storageAccount'), 'name'), format('st{0}{1}', take(variables('sanitizedFunctionName'), 16), take(variables('uniqueToken'), 6)))]",
-    "deploymentContainerName": "[coalesce(tryGet(parameters('deploymentContainer'), 'name'), format('app-package-{0}-{1}', take(variables('sanitizedContainerName'), 43), take(variables('uniqueToken'), 7)))]",
+    "deploymentContainerName": "[coalesce(tryGet(parameters('deploymentContainer'), 'name'), format('app-package-{0}-{1}', variables('sanitizedContainerName'), take(variables('uniqueToken'), 7)))]",
     "servicePlanName": "[coalesce(tryGet(parameters('servicePlan'), 'name'), format('asp-{0}', variables('functionAppName')))]",
     "logAnalyticsWorkspaceName": "[coalesce(tryGet(parameters('logAnalyticsWorkspace'), 'name'), format('log-{0}', variables('functionAppName')))]",
     "applicationInsightsName": "[coalesce(tryGet(parameters('applicationInsights'), 'name'), format('appi-{0}', variables('functionAppName')))]",
@@ -1566,7 +1570,7 @@
     "applicationInsightsDeploymentName": "[take(format('acmebot-{0}-appi', uniqueString(variables('applicationInsightsResourceId'), parameters('location'))), 64)]",
     "storageAccountDeploymentName": "[take(format('acmebot-{0}-storage', uniqueString(variables('storageAccountResourceId'), parameters('location'))), 64)]",
     "functionAppDeploymentName": "[take(format('acmebot-{0}-site', uniqueString(variables('functionAppResourceId'), parameters('location'))), 64)]",
-    "createLogAnalyticsWorkspace": "[and(empty(variables('logAnalyticsWorkspaceResourceIdInput')), or(empty(variables('applicationInsightsResourceIdInput')), parameters('managedDiagnosticSettingsEnabled')))]",
+    "createLogAnalyticsWorkspace": "[and(empty(variables('logAnalyticsWorkspaceResourceIdInput')), empty(variables('applicationInsightsResourceIdInput')))]",
     "createApplicationInsights": "[empty(variables('applicationInsightsResourceIdInput'))]",
     "acmebotMajorVersion": "[format('v{0}', split(parameters('acmebot').version, '.')[0])]",
     "acmebotPackageUri": "[format('https://stacmebotprod.blob.core.windows.net/acmebot/{0}/{1}.zip', variables('acmebotMajorVersion'), parameters('acmebot').version)]",
@@ -1618,7 +1622,7 @@
     "storageAuthenticationType": "[if(variables('storageUsesUserAssignedIdentity'), 'UserAssignedIdentity', 'SystemAssignedIdentity')]",
     "storageIdentityConfigured": "[or(variables('storageUsesUserAssignedIdentity'), variables('systemAssignedEnabled'))]",
     "deploymentStorageAuthentication": "[if(variables('storageUsesUserAssignedIdentity'), createObject('type', variables('storageAuthenticationType'), 'userAssignedIdentityResourceId', variables('storageUserAssignedIdentityResourceId')), createObject('type', variables('storageAuthenticationType')))]",
-    "authSettingsV2": "[if(not(variables('authConfigured')), null(), createObject('name', 'authsettingsV2', 'properties', createObject('platform', createObject('enabled', parameters('authSettings').enabled, 'runtimeVersion', '~1'), 'globalValidation', createObject('requireAuthentication', parameters('authSettings').enabled, 'unauthenticatedClientAction', 'RedirectToLoginPage'), 'identityProviders', createObject('azureActiveDirectory', createObject('enabled', true(), 'registration', createObject('clientId', parameters('authSettings').activeDirectory.clientId, 'clientSecretSettingName', 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET', 'openIdIssuer', parameters('authSettings').activeDirectory.tenantAuthEndpoint))), 'login', createObject('tokenStore', createObject('enabled', false())))))]",
+    "authSettingsV2": "[if(not(variables('authConfigured')), null(), createObject('name', 'authsettingsV2', 'properties', createObject('platform', createObject('enabled', parameters('authSettings').enabled, 'runtimeVersion', '~1'), 'globalValidation', createObject('requireAuthentication', parameters('authSettings').enabled, 'unauthenticatedClientAction', 'RedirectToLoginPage', 'redirectToProvider', 'azureactivedirectory'), 'identityProviders', createObject('azureActiveDirectory', createObject('enabled', true(), 'registration', createObject('clientId', parameters('authSettings').activeDirectory.clientId, 'clientSecretSettingName', 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET', 'openIdIssuer', parameters('authSettings').activeDirectory.tenantAuthEndpoint))), 'login', createObject('tokenStore', createObject('enabled', false())))))]",
     "storageRoleDefinitionIds": {
       "storageBlobDataOwner": "[format('{0}/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b', variables('subscriptionRootResourceId'))]",
       "storageQueueDataContributor": "[format('{0}/providers/Microsoft.Authorization/roleDefinitions/974c5e8b-45b9-4653-ba55-5f855dd0fb88', variables('subscriptionRootResourceId'))]",
@@ -1670,9 +1674,10 @@
     },
     "packageDeployment": {
       "type": "Microsoft.Web/sites/extensions",
-      "apiVersion": "2024-04-01",
+      "apiVersion": "2025-03-01",
       "name": "[format('{0}/{1}', variables('functionAppName'), 'onedeploy')]",
       "properties": {
+        "type": "zip",
         "packageUri": "[variables('acmebotPackageUri')]",
         "remoteBuild": false
       },
@@ -1722,16 +1727,16 @@
             "value": "[variables('storagePublicNetworkAccess')]"
           },
           "blobServices": {
-            "value": "[union(union(createObject('changeFeedEnabled', true(), 'changeFeedRetentionInDays', 30, 'containerDeleteRetentionPolicyEnabled', true(), 'containerDeleteRetentionPolicyDays', 30, 'deleteRetentionPolicyEnabled', true(), 'deleteRetentionPolicyDays', 30, 'isVersioningEnabled', true()), if(parameters('managedDiagnosticSettingsEnabled'), createObject('diagnosticSettings', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, '')), 'logCategoriesAndGroups', createArray(createObject('category', 'StorageRead'), createObject('category', 'StorageWrite'), createObject('category', 'StorageDelete')), 'metricCategories', createArray(createObject('category', 'Transaction'))))), createObject())), coalesce(tryGet(parameters('storageAccount'), 'blobServices'), createObject()), createObject('containers', if(variables('hasDeploymentContainer'), variables('userContainers'), concat(variables('userContainers'), createArray(createObject('name', variables('deploymentContainerName'), 'publicAccess', 'None'))))))]"
+            "value": "[union(union(createObject('changeFeedEnabled', true(), 'changeFeedRetentionInDays', 30, 'containerDeleteRetentionPolicyEnabled', true(), 'containerDeleteRetentionPolicyDays', 30, 'deleteRetentionPolicyEnabled', true(), 'deleteRetentionPolicyDays', 30, 'isVersioningEnabled', true()), if(parameters('managedDiagnosticSettingsEnabled'), createObject('diagnosticSettings', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'logCategoriesAndGroups', createArray(createObject('category', 'StorageRead'), createObject('category', 'StorageWrite'), createObject('category', 'StorageDelete')), 'metricCategories', createArray(createObject('category', 'Transaction'))))), createObject())), coalesce(tryGet(parameters('storageAccount'), 'blobServices'), createObject()), createObject('containers', if(variables('hasDeploymentContainer'), variables('userContainers'), concat(variables('userContainers'), createArray(createObject('name', variables('deploymentContainerName'), 'publicAccess', 'None'))))))]"
           },
           "queueServices": {
-            "value": "[union(if(parameters('managedDiagnosticSettingsEnabled'), createObject('diagnosticSettings', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, '')), 'logCategoriesAndGroups', createArray(createObject('category', 'StorageRead'), createObject('category', 'StorageWrite'), createObject('category', 'StorageDelete')), 'metricCategories', createArray(createObject('category', 'Transaction'))))), createObject()), coalesce(tryGet(parameters('storageAccount'), 'queueServices'), createObject()))]"
+            "value": "[union(if(parameters('managedDiagnosticSettingsEnabled'), createObject('diagnosticSettings', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'logCategoriesAndGroups', createArray(createObject('category', 'StorageRead'), createObject('category', 'StorageWrite'), createObject('category', 'StorageDelete')), 'metricCategories', createArray(createObject('category', 'Transaction'))))), createObject()), coalesce(tryGet(parameters('storageAccount'), 'queueServices'), createObject()))]"
           },
           "tableServices": {
-            "value": "[union(if(parameters('managedDiagnosticSettingsEnabled'), createObject('diagnosticSettings', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, '')), 'logCategoriesAndGroups', createArray(createObject('category', 'StorageRead'), createObject('category', 'StorageWrite'), createObject('category', 'StorageDelete')), 'metricCategories', createArray(createObject('category', 'Transaction'))))), createObject()), coalesce(tryGet(parameters('storageAccount'), 'tableServices'), createObject()))]"
+            "value": "[union(if(parameters('managedDiagnosticSettingsEnabled'), createObject('diagnosticSettings', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'logCategoriesAndGroups', createArray(createObject('category', 'StorageRead'), createObject('category', 'StorageWrite'), createObject('category', 'StorageDelete')), 'metricCategories', createArray(createObject('category', 'Transaction'))))), createObject()), coalesce(tryGet(parameters('storageAccount'), 'tableServices'), createObject()))]"
           },
           "diagnosticSettings": {
-            "value": "[coalesce(tryGet(parameters('storageAccount'), 'diagnosticSettings'), if(parameters('managedDiagnosticSettingsEnabled'), createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, '')), 'metricCategories', createArray(createObject('category', 'Transaction')))), createArray()))]"
+            "value": "[coalesce(tryGet(parameters('storageAccount'), 'diagnosticSettings'), if(parameters('managedDiagnosticSettingsEnabled'), createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId)), 'metricCategories', createArray(createObject('category', 'Transaction')))), createArray()))]"
           },
           "privateEndpoints": {
             "value": "[parameters('storageAccountPrivateEndpoints')]"
@@ -9857,6 +9862,7 @@
         }
       },
       "dependsOn": [
+        "existingApplicationInsights",
         "workspace"
       ]
     },
@@ -13911,7 +13917,7 @@
           "location": {
             "value": "[parameters('location')]"
           },
-          "workspaceResourceId": "[if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), createObject('value', variables('logAnalyticsWorkspaceResourceIdInput')), if(variables('createLogAnalyticsWorkspace'), createObject('value', reference('workspace').outputs.resourceId.value), createObject('value', '')))]",
+          "workspaceResourceId": "[if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), createObject('value', variables('logAnalyticsWorkspaceResourceIdInput')), if(variables('createLogAnalyticsWorkspace'), createObject('value', reference('workspace').outputs.resourceId.value), createObject('value', reference('existingApplicationInsights').WorkspaceResourceId)))]",
           "applicationType": {
             "value": "web"
           },
@@ -14643,6 +14649,7 @@
         }
       },
       "dependsOn": [
+        "existingApplicationInsights",
         "workspace"
       ]
     },
@@ -14700,7 +14707,7 @@
                 "version": "10.0"
               },
               "scaleAndConcurrency": {
-                "maximumInstanceCount": "[coalesce(parameters('maximumInstanceCount'), 100)]",
+                "maximumInstanceCount": "[coalesce(parameters('maximumInstanceCount'), 10)]",
                 "instanceMemoryMB": "[coalesce(parameters('instanceMemoryInMb'), 2048)]"
               }
             }
@@ -14708,7 +14715,7 @@
           "configs": {
             "value": "[concat(createArray(createObject('name', 'appsettings', 'retainCurrentAppSettings', false(), 'properties', union(parameters('additionalAppSettings'), createObject('APPLICATIONINSIGHTS_CONNECTION_STRING', if(variables('createApplicationInsights'), reference('insights').outputs.connectionString.value, reference('existingApplicationInsights').ConnectionString), 'APPINSIGHTS_INSTRUMENTATIONKEY', if(variables('createApplicationInsights'), reference('insights').outputs.instrumentationKey.value, reference('existingApplicationInsights').InstrumentationKey)), union(createObject('AzureWebJobsStorage__credential', 'managedidentity', 'AzureWebJobsStorage__blobServiceUri', reference('storage').outputs.serviceEndpoints.value.blob, 'AzureWebJobsStorage__queueServiceUri', reference('storage').outputs.serviceEndpoints.value.queue, 'AzureWebJobsStorage__tableServiceUri', reference('storage').outputs.serviceEndpoints.value.table), if(variables('storageUsesUserAssignedIdentity'), createObject('AzureWebJobsStorage__clientId', if(variables('storageUsesUserAssignedIdentity'), reference('uamiLookup').outputs.clientId.value, '')), createObject())), variables('acmebotAppSettings'), variables('authAppSettings')))), if(equals(variables('authSettingsV2'), null()), createArray(), createArray(variables('authSettingsV2'))), parameters('configs'))]"
           },
-          "diagnosticSettings": "[if(and(parameters('managedDiagnosticSettingsEnabled'), empty(parameters('diagnosticSettings'))), createObject('value', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, ''))))), createObject('value', parameters('diagnosticSettings')))]",
+          "diagnosticSettings": "[if(and(parameters('managedDiagnosticSettingsEnabled'), empty(parameters('diagnosticSettings'))), createObject('value', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId))))), createObject('value', parameters('diagnosticSettings')))]",
           "privateEndpoints": {
             "value": "[parameters('privateEndpoints')]"
           },
@@ -29385,21 +29392,13 @@
       },
       "value": "[reference('site').outputs.resourceId.value]"
     },
-    "systemAssignedMiPrincipalId": {
+    "systemAssignedMIPrincipalId": {
       "type": "string",
       "nullable": true,
       "metadata": {
         "description": "The principal ID of the system-assigned managed identity."
       },
       "value": "[tryGet(tryGet(reference('site').outputs, 'systemAssignedMIPrincipalId'), 'value')]"
-    },
-    "systemAssignedMiTenantId": {
-      "type": "string",
-      "nullable": true,
-      "metadata": {
-        "description": "The tenant ID of the system-assigned managed identity."
-      },
-      "value": "[if(empty(coalesce(tryGet(tryGet(reference('site').outputs, 'systemAssignedMIPrincipalId'), 'value'), '')), null(), tenant().tenantId)]"
     },
     "privateEndpoints": {
       "type": "array",

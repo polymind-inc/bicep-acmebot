@@ -455,7 +455,7 @@ param virtualNetworkSubnetId string?
 
 @minValue(1)
 @maxValue(1000)
-@description('Optional. Maximum scale-out instance count for the Function App.')
+@description('Optional. Maximum scale-out instance count for the Function App. Defaults to 10.')
 param maximumInstanceCount int?
 
 @allowed([
@@ -491,11 +491,28 @@ var siteConfigVnetRouteAllEnabled = siteConfig.?vnetRouteAllEnabled ?? (virtualN
 
 var normalizedFunctionName = toLower(functionAppName)
 var sanitizedFunctionName = replace(replace(replace(normalizedFunctionName, '-', ''), '_', ''), '.', '')
-var sanitizedContainerName = replace(replace(normalizedFunctionName, '_', '-'), '.', '-')
+// Build a valid Storage container name segment, mirroring the Terraform module:
+// drop characters that are invalid in container names, collapse consecutive hyphens,
+// cap the length, then trim leading/trailing hyphens so the assembled name can never
+// contain "--" or a boundary hyphen. The five collapse passes fully reduce any run of
+// hyphens within the 32-character Function App name limit.
+var containerNameCleaned = replace(replace(normalizedFunctionName, '_', ''), '.', '')
+var containerNameCollapsed = replace(
+  replace(replace(replace(replace(containerNameCleaned, '--', '-'), '--', '-'), '--', '-'), '--', '-'),
+  '--',
+  '-'
+)
+var containerNameTruncated = take(containerNameCollapsed, 43)
+var containerNameNoLeadingHyphen = startsWith(containerNameTruncated, '-')
+  ? substring(containerNameTruncated, 1)
+  : containerNameTruncated
+var sanitizedContainerName = endsWith(containerNameNoLeadingHyphen, '-')
+  ? substring(containerNameNoLeadingHyphen, 0, max(length(containerNameNoLeadingHyphen) - 1, 0))
+  : containerNameNoLeadingHyphen
 var uniqueToken = uniqueString(subscriptionId, resourceGroupName, functionAppName)
 
 var storageAccountName = storageAccount.?name ?? 'st${take(sanitizedFunctionName, 16)}${take(uniqueToken, 6)}'
-var deploymentContainerName = deploymentContainer.?name ?? 'app-package-${take(sanitizedContainerName, 43)}-${take(uniqueToken, 7)}'
+var deploymentContainerName = deploymentContainer.?name ?? 'app-package-${sanitizedContainerName}-${take(uniqueToken, 7)}'
 var servicePlanName = servicePlan.?name ?? 'asp-${functionAppName}'
 var logAnalyticsWorkspaceName = logAnalyticsWorkspace.?name ?? 'log-${functionAppName}'
 var applicationInsightsName = applicationInsights.?name ?? 'appi-${functionAppName}'
@@ -516,11 +533,17 @@ var applicationInsightsDeploymentName = take('acmebot-${uniqueString(application
 var storageAccountDeploymentName = take('acmebot-${uniqueString(storageAccountResourceId, location)}-storage', 64)
 var functionAppDeploymentName = take('acmebot-${uniqueString(functionAppResourceId, location)}-site', 64)
 
-var createLogAnalyticsWorkspace = empty(logAnalyticsWorkspaceResourceIdInput) && (empty(applicationInsightsResourceIdInput) || managedDiagnosticSettingsEnabled)
+// Mirror the Terraform module: only create a managed Log Analytics workspace when
+// neither an existing workspace nor an existing Application Insights component is
+// supplied. When an existing Application Insights is supplied without a workspace,
+// reuse that component's workspace for managed diagnostics instead of creating one.
+var createLogAnalyticsWorkspace = empty(logAnalyticsWorkspaceResourceIdInput) && empty(applicationInsightsResourceIdInput)
 var createApplicationInsights = empty(applicationInsightsResourceIdInput)
 var effectiveLogAnalyticsWorkspaceResourceId = !empty(logAnalyticsWorkspaceResourceIdInput)
   ? logAnalyticsWorkspaceResourceIdInput
-  : (createLogAnalyticsWorkspace ? workspace!.outputs.resourceId : '')
+  : (createLogAnalyticsWorkspace
+      ? workspace!.outputs.resourceId
+      : existingApplicationInsights!.properties.WorkspaceResourceId)
 var applicationInsightsConnectionString = createApplicationInsights
   ? insights!.outputs.connectionString
   : existingApplicationInsights!.properties.ConnectionString
@@ -867,7 +890,7 @@ var flexFunctionConfig = {
     version: '10.0'
   }
   scaleAndConcurrency: {
-    maximumInstanceCount: maximumInstanceCount ?? 100
+    maximumInstanceCount: maximumInstanceCount ?? 10
     instanceMemoryMB: instanceMemoryInMb ?? 2048
   }
 }
@@ -895,6 +918,7 @@ var authSettingsV2 = !authConfigured
         globalValidation: {
           requireAuthentication: authSettings!.enabled
           unauthenticatedClientAction: 'RedirectToLoginPage'
+          redirectToProvider: 'azureactivedirectory'
         }
         identityProviders: {
           azureActiveDirectory: {
@@ -1063,11 +1087,12 @@ resource siteStorageRoleAssignments 'Microsoft.Authorization/roleAssignments@202
   }
 ]
 
-resource packageDeployment 'Microsoft.Web/sites/extensions@2024-04-01' = {
+resource packageDeployment 'Microsoft.Web/sites/extensions@2025-03-01' = {
   parent: functionApp
   name: 'onedeploy'
   #disable-next-line BCP187
   properties: {
+    type: 'zip'
     packageUri: acmebotPackageUri
     remoteBuild: false
   }
@@ -1084,12 +1109,7 @@ output name string = site.outputs.name
 output resourceId string = site.outputs.resourceId
 
 @description('The principal ID of the system-assigned managed identity.')
-output systemAssignedMiPrincipalId string? = site.outputs.?systemAssignedMIPrincipalId
-
-@description('The tenant ID of the system-assigned managed identity.')
-output systemAssignedMiTenantId string? = empty(site.outputs.?systemAssignedMIPrincipalId ?? '')
-  ? null
-  : tenant().tenantId
+output systemAssignedMIPrincipalId string? = site.outputs.?systemAssignedMIPrincipalId
 
 @description('The Function App private endpoints.')
 output privateEndpoints array = site.outputs.privateEndpoints
