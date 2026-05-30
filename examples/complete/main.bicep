@@ -180,7 +180,10 @@ resource keyVaultCertificatesOfficerAssignment 'Microsoft.Authorization/roleAssi
     subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a4417e6f-fecd-4de8-b567-7b0420556985')
   )
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a4417e6f-fecd-4de8-b567-7b0420556985')
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      'a4417e6f-fecd-4de8-b567-7b0420556985'
+    )
     principalId: userAssignedIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }

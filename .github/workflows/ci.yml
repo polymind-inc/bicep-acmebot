@@ -61,6 +61,8 @@ jobs:
         - main.bicep
         - modules/storage-role-assignments.bicep
         - modules/uami-lookup.bicep
+        - examples/default/main.bicep
+        - examples/complete/main.bicep
         - tests/e2e/defaults/main.test.bicep
         - tests/e2e/uami-only/main.test.bicep
 
@@ -79,13 +81,8 @@ jobs:
       run: bicep build "${{ matrix.file }}" --stdout > /dev/null
 
   bicep-params:
-    name: Bicep parameters (${{ matrix.file }})
+    name: Bicep parameters
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        file:
-        - examples/main.bicepparam
 
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -98,8 +95,19 @@ jobs:
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         "$HOME/.local/bin/bicep" --version
 
-    - name: Build Bicep parameters file
-      run: bicep build-params "${{ matrix.file }}" --stdout > /dev/null
+    - name: Build Bicep parameters files
+      shell: bash
+      run: |
+        mapfile -t files < <(git ls-files '*.bicepparam')
+
+        if [ "${#files[@]}" -eq 0 ]; then
+          echo "No Bicep parameters files found."
+          exit 0
+        fi
+
+        for file in "${files[@]}"; do
+          bicep build-params "$file" --stdout > /dev/null
+        done
 
   generated-template:
     name: Generated ARM template
