@@ -34,7 +34,6 @@ type dnsProvidersType = {
   cloudflare: cloudflareType?
   customDns: customDnsType?
   dnsMadeEasy: dnsMadeEasyType?
-  gandi: gandiLiveDnsType?
   gandiLiveDns: gandiLiveDnsType?
   goDaddy: goDaddyType?
   googleDns: googleDnsType?
@@ -224,13 +223,6 @@ type tagType = object
 
 @export()
 type siteConfigType = {
-  minTlsVersion: string?
-  scmMinTlsVersion: string?
-  ftpsState: string?
-  alwaysOn: bool?
-  http20Enabled: bool?
-  healthCheckPath: string?
-  appCommandLine: string?
   scmIpSecurityRestrictionsUseMain: bool?
   vnetRouteAllEnabled: bool?
   ipSecurityRestrictionsDefaultAction: ipRestrictionDefaultActionType?
@@ -243,16 +235,11 @@ type siteConfigType = {
 type storageAccountType = {
   name: string?
   accountReplicationType: storageAccountReplicationType?
-  kind: storageAccountKindType?
-  skuName: storageAccountSkuNameType?
   defaultToOAuthAuthentication: bool?
   allowSharedKeyAccess: bool?
   requireInfrastructureEncryption: bool?
   publicNetworkAccess: storageAccountPublicNetworkAccessType?
   blobServices: blobServicesType?
-  queueServices: storageServiceType?
-  tableServices: storageServiceType?
-  diagnosticSettings: storageAccountDiagnosticSettingType[]?
   networkAcls: object?
   tags: object?
 }
@@ -261,27 +248,7 @@ type storageAccountType = {
 type ipRestrictionDefaultActionType = 'Allow' | 'Deny'
 
 @export()
-type storageAccountKindType = 'BlobStorage' | 'BlockBlobStorage' | 'FileStorage' | 'Storage' | 'StorageV2'
-
-@export()
 type storageAccountReplicationType = 'LRS' | 'GRS' | 'RAGRS' | 'ZRS' | 'GZRS' | 'RAGZRS'
-
-@export()
-type storageAccountSkuNameType =
-  | 'PremiumV2_LRS'
-  | 'PremiumV2_ZRS'
-  | 'Premium_LRS'
-  | 'Premium_ZRS'
-  | 'StandardV2_GRS'
-  | 'StandardV2_GZRS'
-  | 'StandardV2_LRS'
-  | 'StandardV2_ZRS'
-  | 'Standard_GRS'
-  | 'Standard_GZRS'
-  | 'Standard_LRS'
-  | 'Standard_RAGRS'
-  | 'Standard_RAGZRS'
-  | 'Standard_ZRS'
 
 @export()
 type storageAccountPublicNetworkAccessType = 'Disabled' | 'Enabled' | 'SecuredByPerimeter'
@@ -300,44 +267,8 @@ type blobServicesType = {
   deleteRetentionPolicyDays: int?
   deleteRetentionPolicyAllowPermanentDelete: bool?
   isVersioningEnabled: bool?
-  versionDeletePolicyDays: int?
   restorePolicyEnabled: bool?
   restorePolicyDays: int?
-  containers: storageContainerType[]?
-  diagnosticSettings: diagnosticSettingFullType[]?
-}
-
-@export()
-type storageContainerType = {
-  name: string
-  publicAccess: string?
-  metadata: object?
-}
-
-@export()
-type storageServiceType = {
-  diagnosticSettings: diagnosticSettingFullType[]?
-}
-
-@export()
-type storageAccountDiagnosticSettingType = {
-  name: string?
-  metricCategories: diagnosticMetricCategoryType[]?
-  logAnalyticsDestinationType: logAnalyticsDestinationType?
-  workspaceResourceId: string?
-  storageAccountResourceId: string?
-  eventHubAuthorizationRuleResourceId: string?
-  eventHubName: string?
-  marketplacePartnerResourceId: string?
-}
-
-@export()
-type logAnalyticsDestinationType = 'AzureDiagnostics' | 'Dedicated'
-
-@export()
-type diagnosticMetricCategoryType = {
-  category: string
-  enabled: bool?
 }
 
 @export()
@@ -348,8 +279,6 @@ type deploymentContainerType = {
 @export()
 type servicePlanType = {
   name: string?
-  kind: string?
-  skuName: string?
   zoneRedundant: bool?
   tags: object?
 }
@@ -372,13 +301,6 @@ type applicationInsightsType = {
 @export()
 type storageManagedIdentityType = {
   userAssignedResourceId: string?
-}
-
-@export()
-type webConfigType = {
-  name: string
-  properties: object
-  kind: string?
 }
 
 @minLength(2)
@@ -455,7 +377,7 @@ param virtualNetworkSubnetId string?
 
 @minValue(1)
 @maxValue(1000)
-@description('Optional. Maximum scale-out instance count for the Function App.')
+@description('Optional. Maximum scale-out instance count for the Function App. Defaults to 10.')
 param maximumInstanceCount int?
 
 @allowed([
@@ -465,9 +387,6 @@ param maximumInstanceCount int?
 ])
 @description('Optional. Memory size in MB for Flex Consumption instances.')
 param instanceMemoryInMb int?
-
-@description('Optional. Additional Web/Function App config child resources, appended after appsettings and authsettingsV2.')
-param configs webConfigType[] = []
 
 @description('Optional. Whether to read and export the default function host key.')
 param exportApiKey bool = false
@@ -491,11 +410,28 @@ var siteConfigVnetRouteAllEnabled = siteConfig.?vnetRouteAllEnabled ?? (virtualN
 
 var normalizedFunctionName = toLower(functionAppName)
 var sanitizedFunctionName = replace(replace(replace(normalizedFunctionName, '-', ''), '_', ''), '.', '')
-var sanitizedContainerName = replace(replace(normalizedFunctionName, '_', '-'), '.', '-')
+// Build a valid Storage container name segment, mirroring the Terraform module:
+// drop characters that are invalid in container names, collapse consecutive hyphens,
+// cap the length, then trim leading/trailing hyphens so the assembled name can never
+// contain "--" or a boundary hyphen. The five collapse passes fully reduce any run of
+// hyphens within the 32-character Function App name limit.
+var containerNameCleaned = replace(replace(normalizedFunctionName, '_', ''), '.', '')
+var containerNameCollapsed = replace(
+  replace(replace(replace(replace(containerNameCleaned, '--', '-'), '--', '-'), '--', '-'), '--', '-'),
+  '--',
+  '-'
+)
+var containerNameTruncated = take(containerNameCollapsed, 43)
+var containerNameNoLeadingHyphen = startsWith(containerNameTruncated, '-')
+  ? substring(containerNameTruncated, 1)
+  : containerNameTruncated
+var sanitizedContainerName = endsWith(containerNameNoLeadingHyphen, '-')
+  ? substring(containerNameNoLeadingHyphen, 0, max(length(containerNameNoLeadingHyphen) - 1, 0))
+  : containerNameNoLeadingHyphen
 var uniqueToken = uniqueString(subscriptionId, resourceGroupName, functionAppName)
 
 var storageAccountName = storageAccount.?name ?? 'st${take(sanitizedFunctionName, 16)}${take(uniqueToken, 6)}'
-var deploymentContainerName = deploymentContainer.?name ?? 'app-package-${take(sanitizedContainerName, 43)}-${take(uniqueToken, 7)}'
+var deploymentContainerName = deploymentContainer.?name ?? 'app-package-${sanitizedContainerName}-${take(uniqueToken, 7)}'
 var servicePlanName = servicePlan.?name ?? 'asp-${functionAppName}'
 var logAnalyticsWorkspaceName = logAnalyticsWorkspace.?name ?? 'log-${functionAppName}'
 var applicationInsightsName = applicationInsights.?name ?? 'appi-${functionAppName}'
@@ -516,11 +452,17 @@ var applicationInsightsDeploymentName = take('acmebot-${uniqueString(application
 var storageAccountDeploymentName = take('acmebot-${uniqueString(storageAccountResourceId, location)}-storage', 64)
 var functionAppDeploymentName = take('acmebot-${uniqueString(functionAppResourceId, location)}-site', 64)
 
-var createLogAnalyticsWorkspace = empty(logAnalyticsWorkspaceResourceIdInput) && (empty(applicationInsightsResourceIdInput) || managedDiagnosticSettingsEnabled)
+// Mirror the Terraform module: only create a managed Log Analytics workspace when
+// neither an existing workspace nor an existing Application Insights component is
+// supplied. When an existing Application Insights is supplied without a workspace,
+// reuse that component's workspace for managed diagnostics instead of creating one.
+var createLogAnalyticsWorkspace = empty(logAnalyticsWorkspaceResourceIdInput) && empty(applicationInsightsResourceIdInput)
 var createApplicationInsights = empty(applicationInsightsResourceIdInput)
 var effectiveLogAnalyticsWorkspaceResourceId = !empty(logAnalyticsWorkspaceResourceIdInput)
   ? logAnalyticsWorkspaceResourceIdInput
-  : (createLogAnalyticsWorkspace ? workspace!.outputs.resourceId : '')
+  : (createLogAnalyticsWorkspace
+      ? workspace!.outputs.resourceId
+      : existingApplicationInsights!.properties.WorkspaceResourceId)
 var applicationInsightsConnectionString = createApplicationInsights
   ? insights!.outputs.connectionString
   : existingApplicationInsights!.properties.ConnectionString
@@ -539,7 +481,7 @@ var azurePrivateDns = dnsProviders.?azurePrivateDns ?? null
 var cloudflare = dnsProviders.?cloudflare ?? null
 var customDns = dnsProviders.?customDns ?? null
 var dnsMadeEasy = dnsProviders.?dnsMadeEasy ?? null
-var gandiLiveDns = dnsProviders.?gandiLiveDns ?? dnsProviders.?gandi ?? null
+var gandiLiveDns = dnsProviders.?gandiLiveDns ?? null
 var goDaddy = dnsProviders.?goDaddy ?? null
 var googleDns = dnsProviders.?googleDns ?? null
 var ionosDns = dnsProviders.?ionosDns ?? null
@@ -745,10 +687,7 @@ var defaultStorageServiceDiagnosticSettings = [
   }
 ]
 
-var storageAccountDiagnosticSettings = storageAccount.?diagnosticSettings ?? (managedDiagnosticSettingsEnabled ? defaultStorageAccountDiagnosticSettings : [])
-
-var userContainers = storageAccount.?blobServices.?containers ?? []
-var hasDeploymentContainer = !empty(filter(userContainers, c => c.name == deploymentContainerName))
+var storageAccountDiagnosticSettings = managedDiagnosticSettingsEnabled ? defaultStorageAccountDiagnosticSettings : []
 
 var storageBlobServices = union(
   union({
@@ -764,30 +703,22 @@ var storageBlobServices = union(
   } : {}),
   storageAccount.?blobServices ?? {},
   {
-    containers: hasDeploymentContainer
-      ? userContainers
-      : concat(userContainers, [
-          {
-            name: deploymentContainerName
-            publicAccess: 'None'
-          }
-        ])
+    containers: [
+      {
+        name: deploymentContainerName
+        publicAccess: 'None'
+      }
+    ]
   }
 )
 
-var storageQueueServices = union(
-  managedDiagnosticSettingsEnabled ? {
-    diagnosticSettings: defaultStorageServiceDiagnosticSettings
-  } : {},
-  storageAccount.?queueServices ?? {}
-)
+var storageQueueServices = managedDiagnosticSettingsEnabled ? {
+  diagnosticSettings: defaultStorageServiceDiagnosticSettings
+} : {}
 
-var storageTableServices = union(
-  managedDiagnosticSettingsEnabled ? {
-    diagnosticSettings: defaultStorageServiceDiagnosticSettings
-  } : {},
-  storageAccount.?tableServices ?? {}
-)
+var storageTableServices = managedDiagnosticSettingsEnabled ? {
+  diagnosticSettings: defaultStorageServiceDiagnosticSettings
+} : {}
 
 var storageAccountReplication = storageAccount.?accountReplicationType ?? 'LRS'
 var storageAccountDefaultSkuName = storageAccountReplication == 'GRS'
@@ -799,7 +730,7 @@ var storageAccountDefaultSkuName = storageAccountReplication == 'GRS'
           : (storageAccountReplication == 'GZRS'
               ? 'Standard_GZRS'
               : (storageAccountReplication == 'RAGZRS' ? 'Standard_RAGZRS' : 'Standard_LRS'))))
-var storageAccountSkuName = storageAccount.?skuName ?? storageAccountDefaultSkuName
+var storageAccountSkuName = storageAccountDefaultSkuName
 
 var functionAppSiteConfig = union(
   {
@@ -867,7 +798,7 @@ var flexFunctionConfig = {
     version: '10.0'
   }
   scaleAndConcurrency: {
-    maximumInstanceCount: maximumInstanceCount ?? 100
+    maximumInstanceCount: maximumInstanceCount ?? 10
     instanceMemoryMB: instanceMemoryInMb ?? 2048
   }
 }
@@ -895,6 +826,7 @@ var authSettingsV2 = !authConfigured
         globalValidation: {
           requireAuthentication: authSettings!.enabled
           unauthenticatedClientAction: 'RedirectToLoginPage'
+          redirectToProvider: 'azureactivedirectory'
         }
         identityProviders: {
           azureActiveDirectory: {
@@ -922,8 +854,7 @@ var functionAppConfigs = concat(
       properties: functionAppSettings
     }
   ],
-  authSettingsV2 == null ? [] : [authSettingsV2],
-  configs
+  authSettingsV2 == null ? [] : [authSettingsV2]
 )
 
 module storage 'br/public:avm/res/storage/storage-account:0.32.0' = {
@@ -931,7 +862,7 @@ module storage 'br/public:avm/res/storage/storage-account:0.32.0' = {
   params: {
     name: storageAccountName
     location: location
-    kind: storageAccount.?kind ?? 'StorageV2'
+    kind: 'StorageV2'
     skuName: storageAccountSkuName
     allowBlobPublicAccess: false
     defaultToOAuthAuthentication: storageAccount.?defaultToOAuthAuthentication ?? true
@@ -956,9 +887,9 @@ module serverfarm 'br/public:avm/res/web/serverfarm:0.7.0' = {
   params: {
     name: servicePlanName
     location: location
-    kind: servicePlan.?kind ?? 'functionapp'
+    kind: 'functionapp'
     reserved: true
-    skuName: servicePlan.?skuName ?? 'FC1'
+    skuName: 'FC1'
     zoneRedundant: servicePlan.?zoneRedundant ?? false
     tags: servicePlan.?tags ?? resourceTags
     enableTelemetry: enableTelemetry
@@ -1063,11 +994,12 @@ resource siteStorageRoleAssignments 'Microsoft.Authorization/roleAssignments@202
   }
 ]
 
-resource packageDeployment 'Microsoft.Web/sites/extensions@2024-04-01' = {
+resource packageDeployment 'Microsoft.Web/sites/extensions@2025-03-01' = {
   parent: functionApp
   name: 'onedeploy'
   #disable-next-line BCP187
   properties: {
+    type: 'zip'
     packageUri: acmebotPackageUri
     remoteBuild: false
   }
@@ -1084,12 +1016,7 @@ output name string = site.outputs.name
 output resourceId string = site.outputs.resourceId
 
 @description('The principal ID of the system-assigned managed identity.')
-output systemAssignedMiPrincipalId string? = site.outputs.?systemAssignedMIPrincipalId
-
-@description('The tenant ID of the system-assigned managed identity.')
-output systemAssignedMiTenantId string? = empty(site.outputs.?systemAssignedMIPrincipalId ?? '')
-  ? null
-  : tenant().tenantId
+output systemAssignedMIPrincipalId string? = site.outputs.?systemAssignedMIPrincipalId
 
 @description('The Function App private endpoints.')
 output privateEndpoints array = site.outputs.privateEndpoints

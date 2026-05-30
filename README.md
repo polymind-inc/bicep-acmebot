@@ -7,8 +7,8 @@ It deploys:
 - Azure Functions Flex Consumption for Acmebot
 - App Service Plan `FC1`
 - Storage Account and deployment package container
-- Log Analytics Workspace
-- Application Insights
+- Log Analytics Workspace (created unless an existing workspace or Application Insights component is supplied)
+- Application Insights (created unless an existing component is supplied)
 - optional App Service Authentication
 - managed diagnostic settings by default
 - optional private endpoints, role assignments, and locks
@@ -66,13 +66,28 @@ Inputs favor AVM-aligned Bicep shapes instead of mirroring the Terraform variabl
 
 The module defaults to a private posture like the Terraform implementation: Function App and Storage Account public network access default to `Disabled`, and Storage diagnostics are sent to the module-managed or supplied Log Analytics workspace by default. Quickstart samples explicitly enable public access for low-friction testing.
 
+Default diagnostic settings are created for the Function App and Storage Account to the module-managed or supplied Log Analytics workspace; set `managedDiagnosticSettingsEnabled` to `false` to manage diagnostics externally. Set `logAnalyticsWorkspace.resourceId` and/or `applicationInsights.resourceId` to reuse existing monitoring resources instead of creating new ones. The module creates a Log Analytics workspace only when it also creates Application Insights. When an existing `applicationInsights.resourceId` is supplied without `logAnalyticsWorkspace.resourceId`, managed diagnostic settings are sent to the Log Analytics workspace backing that Application Insights component instead of creating a new workspace; set `logAnalyticsWorkspace.resourceId` to route diagnostics elsewhere.
+
 This module does not deploy its own telemetry deployment. Telemetry for referenced published Azure Verified Modules is disabled by default and can be enabled by setting `enableTelemetry` to `true`.
 
 When `virtualNetworkSubnetId` is set, configure storage private endpoints for the storage services Acmebot needs, typically `blob`, `queue`, and `table`, and use a different subnet from the Function App integration subnet.
 
-For managed identity, the Function App uses a system-assigned identity by default. When you disable it by setting `managedIdentities.systemAssigned` to `false` and supply `userAssignedResourceIds`, the module uses the first user-assigned identity for `AzureWebJobsStorage` and the Flex Consumption deployment storage, and resolves its client ID for Acmebot automatically. Set `storageManagedIdentity.userAssignedResourceId` to use a different identity for storage, or `acmebot.managedIdentityClientId` to override the Acmebot client ID.
+For managed identity, the Function App uses a system-assigned identity by default, which is also used for `AzureWebJobsStorage` and the Flex Consumption deployment storage. To use an attached user-assigned identity for storage instead, set `storageManagedIdentity.userAssignedResourceId` (the identity must also be attached through `managedIdentities.userAssignedResourceIds`). When you disable the system-assigned identity by setting `managedIdentities.systemAssigned` to `false`, you must explicitly supply both `storageManagedIdentity.userAssignedResourceId` and `acmebot.managedIdentityClientId`; the module does not auto-select an attached user-assigned identity.
 
 Secret values passed through `acmebot` and `authSettings` are modeled as secure typed properties. `additionalAppSettings` remains a secure arbitrary object for custom app settings, but module-managed Acmebot, storage, and authentication settings take precedence. These values are still configured as Function App settings.
+
+## Outputs
+
+| Output | Description |
+| --- | --- |
+| `name` | The name of the Function App. |
+| `resourceId` | The resource ID of the Function App. |
+| `systemAssignedMIPrincipalId` | The principal ID of the system-assigned managed identity. |
+| `privateEndpoints` | The Function App private endpoints. |
+| `storageAccountPrivateEndpoints` | The Storage Account private endpoints. |
+| `storageAccountName` | The Storage Account name. |
+| `storageAccountResourceId` | The Storage Account resource ID. |
+| `apiKey` | The default Functions host key. Null unless `exportApiKey` is `true`. |
 
 ## Referenced Public Modules
 
