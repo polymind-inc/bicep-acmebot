@@ -402,6 +402,36 @@ var subscriptionRootResourceId = subscription().id
 
 var functionPublicNetworkAccess = publicNetworkAccess ?? 'Disabled'
 var storagePublicNetworkAccess = storageAccount.?publicNetworkAccess ?? 'Disabled'
+var functionPrivateEndpointServices = [for endpoint in privateEndpoints: toLower(endpoint.service)]
+var storagePrivateEndpointServices = [for endpoint in storageAccountPrivateEndpoints: toLower(endpoint.service)]
+var storagePrivateEndpointSubnetResourceIds = [
+  for endpoint in storageAccountPrivateEndpoints: toLower(endpoint.subnetResourceId)
+]
+
+var validatedPrivateEndpoints = functionPublicNetworkAccess == 'Enabled' || contains(
+    functionPrivateEndpointServices,
+    'sites'
+  )
+  ? privateEndpoints
+  : fail('privateEndpoints must include a sites endpoint when publicNetworkAccess is Disabled or unset.')
+var storagePrivateEndpointsWithRequiredServices = storagePublicNetworkAccess == 'Enabled' || (contains(
+    storagePrivateEndpointServices,
+    'blob'
+  ) && contains(storagePrivateEndpointServices, 'queue') && contains(storagePrivateEndpointServices, 'table'))
+  ? storageAccountPrivateEndpoints
+  : fail('storageAccountPrivateEndpoints must include blob, queue, and table endpoints when storageAccount.publicNetworkAccess is Disabled, SecuredByPerimeter, or unset.')
+var storagePrivateEndpointsRequireVnetIntegration = empty(storagePrivateEndpointsWithRequiredServices) || virtualNetworkSubnetId != null
+  ? storagePrivateEndpointsWithRequiredServices
+  : fail('virtualNetworkSubnetId must be set when storageAccountPrivateEndpoints is set so the Function App can route Storage Account traffic through the virtual network.')
+var storagePrivateEndpointsRequiredForVnetIntegration = virtualNetworkSubnetId == null || !empty(storagePrivateEndpointsRequireVnetIntegration)
+  ? storagePrivateEndpointsRequireVnetIntegration
+  : fail('storageAccountPrivateEndpoints must be set when virtualNetworkSubnetId is set so the Function App can access its Storage Account through Private Endpoint.')
+var validatedStorageAccountPrivateEndpoints = virtualNetworkSubnetId == null || !contains(
+    storagePrivateEndpointSubnetResourceIds,
+    toLower(virtualNetworkSubnetId ?? '')
+  )
+  ? storagePrivateEndpointsRequiredForVnetIntegration
+  : fail('storageAccountPrivateEndpoints[*].subnetResourceId must be different from virtualNetworkSubnetId because the Flex Consumption VNET integration subnet cannot be used for private endpoints.')
 
 var siteConfigIpRestrictionDefaultAction = siteConfig.?ipSecurityRestrictionsDefaultAction ?? 'Deny'
 var siteConfigScmIpRestrictionDefaultAction = siteConfig.?scmIpSecurityRestrictionsDefaultAction ?? 'Deny'
@@ -448,7 +478,10 @@ var logAnalyticsWorkspaceDeploymentName = take(
   'acmebot-${uniqueString(logAnalyticsWorkspaceResourceId, location)}-workspace',
   64
 )
-var applicationInsightsDeploymentName = take('acmebot-${uniqueString(applicationInsightsResourceId, location)}-appi', 64)
+var applicationInsightsDeploymentName = take(
+  'acmebot-${uniqueString(applicationInsightsResourceId, location)}-appi',
+  64
+)
 var storageAccountDeploymentName = take('acmebot-${uniqueString(storageAccountResourceId, location)}-storage', 64)
 var functionAppDeploymentName = take('acmebot-${uniqueString(functionAppResourceId, location)}-site', 64)
 
@@ -470,11 +503,19 @@ var applicationInsightsInstrumentationKey = createApplicationInsights
   ? insights!.outputs.instrumentationKey
   : existingApplicationInsights!.properties.InstrumentationKey
 
-var acmebotMajorVersion = 'v${split(acmebot.version, '.')[0]}'
+var acmebotVersionSegments = split(acmebot.version, '.')
+var acmebotVersion = length(acmebotVersionSegments) >= 3 && int(acmebotVersionSegments[0]) >= 5
+  ? acmebot.version
+  : fail('acmebot.version must be a Semantic Versioning 2.0.0 version with major version 5 or greater.')
+var acmebotMajorVersion = 'v${split(acmebotVersion, '.')[0]}'
 #disable-next-line no-hardcoded-env-urls
-var acmebotPackageUri = 'https://stacmebotprod.blob.core.windows.net/acmebot/${acmebotMajorVersion}/${acmebot.version}.zip'
+var acmebotPackageUri = 'https://stacmebotprod.blob.core.windows.net/acmebot/${acmebotMajorVersion}/${acmebotVersion}.zip'
 
-var dnsProviders = acmebot.?dnsProviders ?? {}
+var dnsProvidersInput = acmebot.?dnsProviders ?? {}
+var dnsProviderConfigured = !empty(dnsProvidersInput.?akamai ?? {}) || !empty(dnsProvidersInput.?azureDns ?? {}) || !empty(dnsProvidersInput.?azurePrivateDns ?? {}) || !empty(dnsProvidersInput.?cloudflare ?? {}) || !empty(dnsProvidersInput.?customDns ?? {}) || !empty(dnsProvidersInput.?dnsMadeEasy ?? {}) || !empty(dnsProvidersInput.?gandiLiveDns ?? {}) || !empty(dnsProvidersInput.?goDaddy ?? {}) || !empty(dnsProvidersInput.?googleDns ?? {}) || !empty(dnsProvidersInput.?ionosDns ?? {}) || !empty(dnsProvidersInput.?ovh ?? {}) || !empty(dnsProvidersInput.?powerDns ?? {}) || !empty(dnsProvidersInput.?regfish ?? {}) || !empty(dnsProvidersInput.?route53 ?? {}) || !empty(dnsProvidersInput.?transIp ?? {}) || !empty(dnsProvidersInput.?unitedDomains ?? {})
+var dnsProviders = dnsProviderConfigured
+  ? dnsProvidersInput
+  : fail('At least one acmebot.dnsProviders entry must be configured.')
 var akamai = dnsProviders.?akamai ?? null
 var azureDns = dnsProviders.?azureDns ?? null
 var azurePrivateDns = dnsProviders.?azurePrivateDns ?? null
@@ -495,9 +536,31 @@ var externalAccountBinding = acmebot.?externalAccountBinding ?? null
 var webhookUrl = acmebot.?webhookUrl ?? null
 var preferredChain = acmebot.?preferredChain ?? null
 var preferredProfile = acmebot.?preferredProfile ?? null
-var acmebotManagedIdentityClientId = acmebot.?managedIdentityClientId ?? null
+var acmebotManagedIdentityClientIdInput = acmebot.?managedIdentityClientId ?? ''
 var acmebotEnvironment = acmebot.?environment ?? 'AzureCloud'
 var acmebotUseSystemNameServer = acmebot.?useSystemNameServer ?? (virtualNetworkSubnetId != null || acmebotEnvironment != 'AzureCloud')
+var systemAssignedEnabled = managedIdentities.?systemAssigned ?? true
+var attachedUserAssignedIdentityResourceIds = [
+  for resourceId in (managedIdentities.?userAssignedResourceIds ?? []): toLower(resourceId)
+]
+var storageUserAssignedIdentityResourceIdInput = storageManagedIdentity.?userAssignedResourceId ?? ''
+var storageUsesUserAssignedIdentity = !empty(storageUserAssignedIdentityResourceIdInput)
+// Storage identity must be supplied explicitly. When no system-assigned identity is enabled,
+// set storageManagedIdentity.userAssignedResourceId (and acmebot.managedIdentityClientId) to an
+// attached user-assigned identity; the module does not auto-select one.
+var storageUserAssignedIdentityResourceId = systemAssignedEnabled || storageUsesUserAssignedIdentity
+  ? (!storageUsesUserAssignedIdentity || contains(
+        attachedUserAssignedIdentityResourceIds,
+        toLower(storageUserAssignedIdentityResourceIdInput)
+      )
+      ? storageUserAssignedIdentityResourceIdInput
+      : fail('storageManagedIdentity.userAssignedResourceId must also be attached through managedIdentities.userAssignedResourceIds.'))
+  : fail('storageManagedIdentity.userAssignedResourceId must be set when managedIdentities.systemAssigned is false.')
+var acmebotManagedIdentityClientId = systemAssignedEnabled || !empty(acmebotManagedIdentityClientIdInput)
+  ? (empty(acmebotManagedIdentityClientIdInput) || !empty(attachedUserAssignedIdentityResourceIds)
+      ? acmebotManagedIdentityClientIdInput
+      : fail('acmebot.managedIdentityClientId can only be set when at least one user-assigned managed identity is attached through managedIdentities.userAssignedResourceIds.'))
+  : fail('acmebot.managedIdentityClientId must be set when managedIdentities.systemAssigned is false so Acmebot can use an attached user-assigned managed identity.')
 
 var acmebotCommonAppSettings = {
   Acmebot__Contacts: acmebot.mailAddress
@@ -690,17 +753,22 @@ var defaultStorageServiceDiagnosticSettings = [
 var storageAccountDiagnosticSettings = managedDiagnosticSettingsEnabled ? defaultStorageAccountDiagnosticSettings : []
 
 var storageBlobServices = union(
-  union({
-    changeFeedEnabled: true
-    changeFeedRetentionInDays: 30
-    containerDeleteRetentionPolicyEnabled: true
-    containerDeleteRetentionPolicyDays: 30
-    deleteRetentionPolicyEnabled: true
-    deleteRetentionPolicyDays: 30
-    isVersioningEnabled: true
-  }, managedDiagnosticSettingsEnabled ? {
-    diagnosticSettings: defaultStorageServiceDiagnosticSettings
-  } : {}),
+  union(
+    {
+      changeFeedEnabled: true
+      changeFeedRetentionInDays: 30
+      containerDeleteRetentionPolicyEnabled: true
+      containerDeleteRetentionPolicyDays: 30
+      deleteRetentionPolicyEnabled: true
+      deleteRetentionPolicyDays: 30
+      isVersioningEnabled: true
+    },
+    managedDiagnosticSettingsEnabled
+      ? {
+          diagnosticSettings: defaultStorageServiceDiagnosticSettings
+        }
+      : {}
+  ),
   storageAccount.?blobServices ?? {},
   {
     containers: [
@@ -712,13 +780,17 @@ var storageBlobServices = union(
   }
 )
 
-var storageQueueServices = managedDiagnosticSettingsEnabled ? {
-  diagnosticSettings: defaultStorageServiceDiagnosticSettings
-} : {}
+var storageQueueServices = managedDiagnosticSettingsEnabled
+  ? {
+      diagnosticSettings: defaultStorageServiceDiagnosticSettings
+    }
+  : {}
 
-var storageTableServices = managedDiagnosticSettingsEnabled ? {
-  diagnosticSettings: defaultStorageServiceDiagnosticSettings
-} : {}
+var storageTableServices = managedDiagnosticSettingsEnabled
+  ? {
+      diagnosticSettings: defaultStorageServiceDiagnosticSettings
+    }
+  : {}
 
 var storageAccountReplication = storageAccount.?accountReplicationType ?? 'LRS'
 var storageAccountDefaultSkuName = storageAccountReplication == 'GRS'
@@ -748,14 +820,8 @@ var functionAppSiteConfig = union(
 var storagePrimaryEndpoints = storage.outputs.serviceEndpoints
 var storageContainerEndpointUrl = '${storagePrimaryEndpoints.blob}${deploymentContainerName}'
 
-var systemAssignedEnabled = managedIdentities.?systemAssigned ?? true
-// Storage identity must be supplied explicitly. When no system-assigned identity is enabled,
-// set storageManagedIdentity.userAssignedResourceId (and acmebot.managedIdentityClientId) to an
-// attached user-assigned identity; the module does not auto-select one.
-var storageUserAssignedIdentityResourceId = storageManagedIdentity.?userAssignedResourceId ?? ''
-var storageUsesUserAssignedIdentity = !empty(storageUserAssignedIdentityResourceId)
 var storageAuthenticationType = storageUsesUserAssignedIdentity ? 'UserAssignedIdentity' : 'SystemAssignedIdentity'
-var storageIdentityConfigured = storageUsesUserAssignedIdentity || systemAssignedEnabled
+var storageIdentityConfigured = !empty(storageUserAssignedIdentityResourceId) || systemAssignedEnabled
 
 var storageManagedIdentityClientId = storageUsesUserAssignedIdentity ? uamiLookup!.outputs.clientId : ''
 var storageManagedIdentityPrincipalId = storageUsesUserAssignedIdentity
@@ -770,10 +836,10 @@ var azureWebJobsStorageIdentityAppSettings = union(
     AzureWebJobsStorage__tableServiceUri: storagePrimaryEndpoints.table
   },
   storageUsesUserAssignedIdentity
-  ? {
-      AzureWebJobsStorage__clientId: storageManagedIdentityClientId
-    }
-  : {}
+    ? {
+        AzureWebJobsStorage__clientId: storageManagedIdentityClientId
+      }
+    : {}
 )
 
 var deploymentStorageAuthentication = storageUsesUserAssignedIdentity
@@ -874,7 +940,7 @@ module storage 'br/public:avm/res/storage/storage-account:0.32.0' = {
     queueServices: storageQueueServices
     tableServices: storageTableServices
     diagnosticSettings: storageAccountDiagnosticSettings
-    privateEndpoints: storageAccountPrivateEndpoints
+    privateEndpoints: validatedStorageAccountPrivateEndpoints
     networkAcls: storageAccount.?networkAcls
     lock: lock
     tags: storageAccount.?tags ?? resourceTags
@@ -940,7 +1006,7 @@ module site 'br/public:avm/res/web/site:0.23.0' = {
     functionAppConfig: flexFunctionConfig
     configs: functionAppConfigs
     diagnosticSettings: functionDiagnosticSettings
-    privateEndpoints: privateEndpoints
+    privateEndpoints: validatedPrivateEndpoints
     roleAssignments: roleAssignments
     lock: lock
     tags: resourceTags
@@ -963,36 +1029,25 @@ resource functionApp 'Microsoft.Web/sites@2025-03-01' existing = {
   name: functionAppName
 }
 
-resource storageAccountRef 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
-  name: storageAccountName
-}
-
 var storageRoleDefinitionIds = {
   storageBlobDataOwner: '${subscriptionRootResourceId}/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b'
   storageQueueDataContributor: '${subscriptionRootResourceId}/providers/Microsoft.Authorization/roleDefinitions/974c5e8b-45b9-4653-ba55-5f855dd0fb88'
   storageTableDataContributor: '${subscriptionRootResourceId}/providers/Microsoft.Authorization/roleDefinitions/0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3'
 }
 
-resource siteStorageRoleAssignments 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
-  for roleDefinition in items(storageRoleDefinitionIds): if (storageIdentityConfigured) {
-    scope: storageAccountRef
-    name: guid(
-      storageAccountRef.id,
-      roleDefinition.key,
-      storageUsesUserAssignedIdentity ? storageUserAssignedIdentityResourceId : functionAppName
-    )
-    properties: {
-      principalId: storageManagedIdentityPrincipalId
-      roleDefinitionId: roleDefinition.value
-      principalType: 'ServicePrincipal'
-    }
-    dependsOn: [
-      // The scope is an existing-resource symbol, so keep the module dependency explicit.
-      #disable-next-line no-unnecessary-dependson
-      storage
-    ]
+module siteStorageRoleAssignments 'modules/storage-role-assignments.bicep' = if (storageIdentityConfigured) {
+  name: take('acmebot-${uniqueString(storageAccountResourceId, location)}-storage-rbac', 64)
+  params: {
+    storageAccountName: storageAccountName
+    principalId: storageManagedIdentityPrincipalId
+    roleDefinitionIds: storageRoleDefinitionIds
   }
-]
+  dependsOn: [
+    // The child module scopes role assignments to an existing-resource symbol, so keep this dependency explicit.
+    #disable-next-line no-unnecessary-dependson
+    storage
+  ]
+}
 
 resource packageDeployment 'Microsoft.Web/sites/extensions@2025-03-01' = {
   parent: functionApp
