@@ -61,10 +61,13 @@ jobs:
         - main.bicep
         - modules/storage-role-assignments.bicep
         - modules/uami-lookup.bicep
+        - modules/function-host-keys.bicep
+        - modules/function-identity-validation.bicep
         - examples/default/main.bicep
         - examples/complete/main.bicep
         - tests/e2e/defaults/main.test.bicep
         - tests/e2e/uami-only/main.test.bicep
+        - tests/e2e/authentication/main.test.bicep
 
     steps:
     - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -129,3 +132,7 @@ jobs:
 
     - name: Check generated ARM template
       run: git diff --exit-code -- main.json
+
+    - name: Check template contracts
+      shell: pwsh
+      run: ./tests/unit/template.tests.ps1

@@ -168,15 +168,28 @@ type externalAccountBindingType = {
 @export()
 type authSettingsType = {
   enabled: bool
-  activeDirectory: authSettingsActiveDirectoryType
+  defaultProvider: string?
+  microsoftEntra: authSettingsActiveDirectoryType?
+  activeDirectory: authSettingsActiveDirectoryType?
+  customOpenIdConnectProviders: {
+    *: customOpenIdConnectProviderType
+  }?
 }
 
 @export()
 type authSettingsActiveDirectoryType = {
   clientId: string
   @secure()
-  clientSecret: string
+  clientSecret: string?
   tenantAuthEndpoint: string
+}
+
+@export()
+type customOpenIdConnectProviderType = {
+  clientId: string
+  @secure()
+  clientSecret: string
+  wellKnownOpenIdConfiguration: string
 }
 
 @export()
@@ -293,6 +306,7 @@ type logAnalyticsWorkspaceType = {
 
 @export()
 type applicationInsightsType = {
+  create: bool?
   resourceId: string?
   name: string?
   tags: object?
@@ -318,14 +332,21 @@ param acmebot acmebotType
 @description('Optional. Additional application settings for the Function App. Acmebot, storage, and authentication settings supplied by this module take precedence.')
 param additionalAppSettings object = {}
 
-@description('Optional. App Service Authentication settings for Microsoft Entra ID.')
+@description('Optional. App Service Authentication settings for Microsoft Entra ID and custom OpenID Connect providers. activeDirectory is a compatibility alias for microsoftEntra.')
 param authSettings authSettingsType?
+
+@secure()
+@description('Optional. Microsoft Entra client secret. Overrides the secret in authSettings.microsoftEntra or authSettings.activeDirectory. Required when Entra authentication is enabled.')
+param authSettingsClientSecret string?
 
 @description('Optional. Diagnostic settings for the Function App, using an AVM-aligned diagnosticSettings shape.')
 param diagnosticSettings diagnosticSettingFullType[] = []
 
-@description('Optional. Whether the module creates default diagnostic settings for the Function App and Storage Account resources to the module-managed or supplied Log Analytics workspace. When diagnosticSettings is set, those Function App settings are used instead of the default.')
-param managedDiagnosticSettingsEnabled bool = true
+@description('Optional. Opt in to legacy managed diagnostic settings for the Function App and Storage Account. Defaults to false to match Terraform. Explicit Function App diagnosticSettings take precedence.')
+param managedDiagnosticSettingsEnabled bool = false
+
+@description('Optional. Whether to create private DNS zone groups. Set false when private DNS is managed externally.')
+param privateEndpointsManageDnsZoneGroup bool = true
 
 @description('Optional. Private endpoints for the Function App, using an AVM-aligned web/site privateEndpoints array shape.')
 param privateEndpoints privateEndpointType[] = []
@@ -390,6 +411,9 @@ param instanceMemoryInMb int?
 
 @description('Optional. Whether to read and export the default function host key.')
 param exportApiKey bool = false
+
+@description('Optional. Provision infrastructure without deploying the Acmebot package. Deploy the package separately from a host with network access to the Function App.')
+param skipPackageDeployment bool = false
 
 @description('Optional. Enable or disable telemetry for referenced published Azure Verified Modules. This module does not deploy its own telemetry deployment.')
 param enableTelemetry bool = false
@@ -489,8 +513,11 @@ var functionAppDeploymentName = take('acmebot-${uniqueString(functionAppResource
 // neither an existing workspace nor an existing Application Insights component is
 // supplied. When an existing Application Insights is supplied without a workspace,
 // reuse that component's workspace for managed diagnostics instead of creating one.
-var createLogAnalyticsWorkspace = empty(logAnalyticsWorkspaceResourceIdInput) && empty(applicationInsightsResourceIdInput)
-var createApplicationInsights = empty(applicationInsightsResourceIdInput)
+var createApplicationInsightsInput = applicationInsights.?create ?? empty(applicationInsightsResourceIdInput)
+var createApplicationInsights = createApplicationInsightsInput == empty(applicationInsightsResourceIdInput)
+  ? createApplicationInsightsInput
+  : fail('applicationInsights.create must be true when resourceId is absent and false when resourceId is set.')
+var createLogAnalyticsWorkspace = createApplicationInsights && empty(logAnalyticsWorkspaceResourceIdInput)
 var effectiveLogAnalyticsWorkspaceResourceId = !empty(logAnalyticsWorkspaceResourceIdInput)
   ? logAnalyticsWorkspaceResourceIdInput
   : (createLogAnalyticsWorkspace
@@ -499,17 +526,12 @@ var effectiveLogAnalyticsWorkspaceResourceId = !empty(logAnalyticsWorkspaceResou
 var applicationInsightsConnectionString = createApplicationInsights
   ? insights!.outputs.connectionString
   : existingApplicationInsights!.properties.ConnectionString
-var applicationInsightsInstrumentationKey = createApplicationInsights
-  ? insights!.outputs.instrumentationKey
-  : existingApplicationInsights!.properties.InstrumentationKey
 
 var acmebotVersionSegments = split(acmebot.version, '.')
 var acmebotVersion = length(acmebotVersionSegments) >= 3 && int(acmebotVersionSegments[0]) >= 5
   ? acmebot.version
   : fail('acmebot.version must be a Semantic Versioning 2.0.0 version with major version 5 or greater.')
-var acmebotMajorVersion = 'v${split(acmebotVersion, '.')[0]}'
-#disable-next-line no-hardcoded-env-urls
-var acmebotPackageUri = 'https://stacmebotprod.blob.core.windows.net/acmebot/${acmebotMajorVersion}/${acmebotVersion}.zip'
+var acmebotPackageUri = 'https://github.com/polymind-inc/acmebot/releases/download/v${acmebotVersion}/acmebot.zip'
 
 var dnsProvidersInput = acmebot.?dnsProviders ?? {}
 var dnsProviderConfigured = !empty(dnsProvidersInput.?akamai ?? {}) || !empty(dnsProvidersInput.?azureDns ?? {}) || !empty(dnsProvidersInput.?azurePrivateDns ?? {}) || !empty(dnsProvidersInput.?cloudflare ?? {}) || !empty(dnsProvidersInput.?customDns ?? {}) || !empty(dnsProvidersInput.?dnsMadeEasy ?? {}) || !empty(dnsProvidersInput.?gandiLiveDns ?? {}) || !empty(dnsProvidersInput.?goDaddy ?? {}) || !empty(dnsProvidersInput.?googleDns ?? {}) || !empty(dnsProvidersInput.?ionosDns ?? {}) || !empty(dnsProvidersInput.?ovh ?? {}) || !empty(dnsProvidersInput.?powerDns ?? {}) || !empty(dnsProvidersInput.?regfish ?? {}) || !empty(dnsProvidersInput.?route53 ?? {}) || !empty(dnsProvidersInput.?transIp ?? {}) || !empty(dnsProvidersInput.?unitedDomains ?? {})
@@ -569,7 +591,7 @@ var acmebotCommonAppSettings = {
   Acmebot__Environment: acmebotEnvironment
   Acmebot__RenewBeforeExpiry: string(acmebot.?renewBeforeExpiry ?? 30)
   Acmebot__UseSystemNameServer: string(acmebotUseSystemNameServer)
-  Acmebot__AppRoleRequired: string(acmebot.?appRoleRequired ?? false)
+  Acmebot__RequireAppRoles: string(acmebot.?appRoleRequired ?? false)
 }
 
 var acmebotAppSettings = union(
@@ -699,13 +721,43 @@ var acmebotAppSettings = union(
       }
 )
 
-var authConfigured = authSettings != null
+var authConfigured = authSettings == null
+  ? false
+  : (!authSettings!.enabled || (authDefaultProvider == 'microsoft_entra'
+        ? authMicrosoftEntra != null
+        : contains(authCustomProviders, authDefaultProvider)))
+      ? true
+      : fail('When authentication is enabled, authSettings.defaultProvider must refer to a configured provider.')
 
-var authAppSettings = !authConfigured
+var authMicrosoftEntra = authSettings.?microsoftEntra ?? authSettings.?activeDirectory
+var authDefaultProvider = authSettings.?defaultProvider ?? 'microsoft_entra'
+var authCustomProvidersInput = authSettings.?customOpenIdConnectProviders ?? {}
+var invalidAuthProviderNames = filter(
+  items(authCustomProvidersInput),
+  provider =>
+    empty(provider.key) || contains(['microsoft_entra', 'azureactivedirectory'], toLower(provider.key)) || !empty(filter(
+      range(0, length(provider.key)),
+      index => !contains('abcdefghijklmnopqrstuvwxyz0123456789._', toLower(substring(provider.key, index, 1)))
+    ))
+)
+var authCustomProviders = empty(invalidAuthProviderNames)
+  ? authCustomProvidersInput
+  : fail('Custom OIDC provider names must contain only ASCII letters, digits, periods, and underscores; microsoft_entra and azureactivedirectory are reserved.')
+var authClientSecretInput = authSettingsClientSecret ?? authMicrosoftEntra.?clientSecret
+var authClientSecret = authMicrosoftEntra == null || !(authSettings.?enabled ?? false) || authClientSecretInput != null
+  ? authClientSecretInput
+  : fail('The Microsoft Entra client secret must be set when authentication is enabled.')
+var authAdAppSettings = authMicrosoftEntra == null || authClientSecret == null
   ? {}
   : {
-      MICROSOFT_PROVIDER_AUTHENTICATION_SECRET: authSettings!.activeDirectory.clientSecret
+      MICROSOFT_PROVIDER_AUTHENTICATION_SECRET: authClientSecret
     }
+var authCustomOidcAppSettings = toObject(
+  items(authCustomProviders),
+  provider => 'CUSTOM_OIDC_${provider.key}_AUTHENTICATION_SECRET',
+  provider => provider.value.clientSecret
+)
+var authAppSettings = union(authAdAppSettings, authCustomOidcAppSettings)
 
 var defaultFunctionDiagnosticSettings = [
   {
@@ -869,11 +921,22 @@ var flexFunctionConfig = {
   }
 }
 
+var reservedAdditionalAppSettings = filter(
+  items(additionalAppSettings),
+  setting =>
+    startsWith(toLower(setting.key), 'acmebot__') || startsWith(toLower(setting.key), 'azurewebjobsstorage') || toLower(setting.key) == 'microsoft_provider_authentication_secret' || (startsWith(
+      toLower(setting.key),
+      'custom_oidc_'
+    ) && endsWith(toLower(setting.key), '_authentication_secret'))
+)
+var validatedAdditionalAppSettings = empty(reservedAdditionalAppSettings)
+  ? additionalAppSettings
+  : fail('additionalAppSettings cannot override reserved Acmebot, AzureWebJobsStorage, or authentication secret settings.')
+
 var functionAppSettings = union(
-  additionalAppSettings,
+  validatedAdditionalAppSettings,
   {
     APPLICATIONINSIGHTS_CONNECTION_STRING: applicationInsightsConnectionString
-    APPINSIGHTS_INSTRUMENTATIONKEY: applicationInsightsInstrumentationKey
   },
   azureWebJobsStorageIdentityAppSettings,
   acmebotAppSettings,
@@ -892,17 +955,34 @@ var authSettingsV2 = !authConfigured
         globalValidation: {
           requireAuthentication: authSettings!.enabled
           unauthenticatedClientAction: 'RedirectToLoginPage'
-          redirectToProvider: 'azureactivedirectory'
+          redirectToProvider: !authSettings!.enabled
+            ? null
+            : (authDefaultProvider == 'microsoft_entra' ? 'azureactivedirectory' : authDefaultProvider)
         }
         identityProviders: {
-          azureActiveDirectory: {
+          azureActiveDirectory: authMicrosoftEntra == null
+            ? null
+            : {
+                enabled: true
+                registration: {
+                  clientId: authMicrosoftEntra!.clientId
+                  clientSecretSettingName: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
+                  openIdIssuer: authMicrosoftEntra!.tenantAuthEndpoint
+                }
+              }
+          customOpenIdConnectProviders: toObject(items(authCustomProviders), provider => provider.key, provider => {
             enabled: true
             registration: {
-              clientId: authSettings!.activeDirectory.clientId
-              clientSecretSettingName: 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET'
-              openIdIssuer: authSettings!.activeDirectory.tenantAuthEndpoint
+              clientId: provider.value.clientId
+              clientCredential: {
+                method: 'ClientSecretPost'
+                clientSecretSettingName: 'CUSTOM_OIDC_${provider.key}_AUTHENTICATION_SECRET'
+              }
+              openIdConnectConfiguration: {
+                wellKnownOpenIdConfiguration: provider.value.wellKnownOpenIdConfiguration
+              }
             }
-          }
+          })
         }
         login: {
           tokenStore: {
@@ -923,7 +1003,7 @@ var functionAppConfigs = concat(
   authSettingsV2 == null ? [] : [authSettingsV2]
 )
 
-module storage 'br/public:avm/res/storage/storage-account:0.32.0' = {
+module storage 'br/public:avm/res/storage/storage-account:0.33.1' = {
   name: storageAccountDeploymentName
   params: {
     name: storageAccountName
@@ -940,9 +1020,13 @@ module storage 'br/public:avm/res/storage/storage-account:0.32.0' = {
     queueServices: storageQueueServices
     tableServices: storageTableServices
     diagnosticSettings: storageAccountDiagnosticSettings
-    privateEndpoints: validatedStorageAccountPrivateEndpoints
+    privateEndpoints: [
+      for endpoint in validatedStorageAccountPrivateEndpoints: union(endpoint, {
+        privateDnsZoneGroup: privateEndpointsManageDnsZoneGroup ? endpoint.?privateDnsZoneGroup : null
+      })
+    ]
     networkAcls: storageAccount.?networkAcls
-    lock: lock
+    lock: null
     tags: storageAccount.?tags ?? resourceTags
     enableTelemetry: enableTelemetry
   }
@@ -962,7 +1046,7 @@ module serverfarm 'br/public:avm/res/web/serverfarm:0.7.0' = {
   }
 }
 
-module workspace 'br/public:avm/res/operational-insights/workspace:0.15.1' = if (createLogAnalyticsWorkspace) {
+module workspace 'br/public:avm/res/operational-insights/workspace:0.16.1' = if (createLogAnalyticsWorkspace) {
   name: logAnalyticsWorkspaceDeploymentName
   params: {
     name: logAnalyticsWorkspaceName
@@ -973,7 +1057,7 @@ module workspace 'br/public:avm/res/operational-insights/workspace:0.15.1' = if 
   }
 }
 
-module insights 'br/public:avm/res/insights/component:0.7.1' = if (createApplicationInsights) {
+module insights 'br/public:avm/res/insights/component:0.8.0' = if (createApplicationInsights) {
   name: applicationInsightsDeploymentName
   params: {
     name: applicationInsightsName
@@ -990,7 +1074,7 @@ resource existingApplicationInsights 'Microsoft.Insights/components@2020-02-02' 
   name: last(existingApplicationInsightsResourceIdParts)
 }
 
-module site 'br/public:avm/res/web/site:0.23.0' = {
+module site 'br/public:avm/res/web/site:0.24.0' = {
   name: functionAppDeploymentName
   params: {
     name: functionAppName
@@ -1006,7 +1090,12 @@ module site 'br/public:avm/res/web/site:0.23.0' = {
     functionAppConfig: flexFunctionConfig
     configs: functionAppConfigs
     diagnosticSettings: functionDiagnosticSettings
-    privateEndpoints: validatedPrivateEndpoints
+    privateEndpoints: [
+      for endpoint in validatedPrivateEndpoints: union(endpoint, {
+        privateDnsZoneGroup: privateEndpointsManageDnsZoneGroup ? endpoint.?privateDnsZoneGroup : null
+        lock: endpoint.?lock ?? lock
+      })
+    ]
     roleAssignments: roleAssignments
     lock: lock
     tags: resourceTags
@@ -1022,6 +1111,14 @@ module uamiLookup 'modules/uami-lookup.bicep' = if (storageUsesUserAssignedIdent
   )
   params: {
     name: last(split(storageUserAssignedIdentityResourceId, '/'))
+  }
+}
+
+module functionAppIdentityValidation 'modules/function-identity-validation.bicep' = {
+  name: take('acmebot-${uniqueString(functionAppResourceId, location)}-identity-check', 64)
+  params: {
+    name: site.outputs.name
+    clientId: acmebotManagedIdentityClientId
   }
 }
 
@@ -1049,7 +1146,7 @@ module siteStorageRoleAssignments 'modules/storage-role-assignments.bicep' = if 
   ]
 }
 
-resource packageDeployment 'Microsoft.Web/sites/extensions@2025-03-01' = {
+resource packageDeployment 'Microsoft.Web/sites/extensions@2025-03-01' = if (!skipPackageDeployment) {
   parent: functionApp
   name: 'onedeploy'
   #disable-next-line BCP187
@@ -1061,6 +1158,22 @@ resource packageDeployment 'Microsoft.Web/sites/extensions@2025-03-01' = {
   dependsOn: [
     site
     siteStorageRoleAssignments
+    functionAppIdentityValidation
+  ]
+}
+
+var exportApiKeyEnabled = exportApiKey && skipPackageDeployment
+  ? fail('exportApiKey must be false when skipPackageDeployment is true.')
+  : exportApiKey
+
+module functionHostKeys 'modules/function-host-keys.bicep' = {
+  name: take('acmebot-${uniqueString(functionAppResourceId, location)}-host-keys', 64)
+  params: {
+    name: site.outputs.name
+    enabled: exportApiKeyEnabled
+  }
+  dependsOn: [
+    packageDeployment
   ]
 }
 
@@ -1087,6 +1200,9 @@ output storageAccountResourceId string = storage.outputs.resourceId
 
 @secure()
 @description('Created default Functions API key. Null unless exportApiKey is true.')
-output apiKey string? = exportApiKey
-  ? listKeys('${functionApp.id}/host/default', '2025-03-01').functionKeys.default
-  : null
+#disable-next-line use-safe-access
+output apiKey string? = functionHostKeys.outputs.apiKey
+
+@secure()
+@description('The deployed Function App resource.')
+output resource object = functionApp
