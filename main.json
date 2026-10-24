@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "11576435008178194248"
+      "templateHash": "2994940580659770991"
     },
     "name": "Azure Acmebot",
     "description": "Deploys Azure Acmebot on Azure Functions Flex Consumption using AVM-aligned conventions and published Bicep modules."
@@ -1476,9 +1476,11 @@
     "storageAuthenticationType": "[if(variables('storageUsesUserAssignedIdentity'), 'UserAssignedIdentity', 'SystemAssignedIdentity')]",
     "storageIdentityConfigured": "[or(not(empty(variables('storageUserAssignedIdentityResourceId'))), variables('systemAssignedEnabled'))]",
     "deploymentStorageAuthentication": "[if(variables('storageUsesUserAssignedIdentity'), createObject('type', variables('storageAuthenticationType'), 'userAssignedIdentityResourceId', variables('storageUserAssignedIdentityResourceId')), createObject('type', variables('storageAuthenticationType')))]",
-    "reservedAdditionalAppSettings": "[filter(items(parameters('additionalAppSettings')), lambda('setting', or(or(or(startsWith(toLower(lambdaVariables('setting').key), 'acmebot__'), startsWith(toLower(lambdaVariables('setting').key), 'azurewebjobsstorage')), equals(toLower(lambdaVariables('setting').key), 'microsoft_provider_authentication_secret')), and(startsWith(toLower(lambdaVariables('setting').key), 'custom_oidc_'), endsWith(toLower(lambdaVariables('setting').key), '_authentication_secret')))))]",
+    "acmebotAppSettingKeys": "[map(items(variables('acmebotAppSettings')), lambda('setting', toLower(lambdaVariables('setting').key)))]",
+    "reservedAdditionalAppSettings": "[filter(items(parameters('additionalAppSettings')), lambda('setting', or(or(or(contains(variables('acmebotAppSettingKeys'), toLower(lambdaVariables('setting').key)), startsWith(toLower(lambdaVariables('setting').key), 'azurewebjobsstorage')), equals(toLower(lambdaVariables('setting').key), 'microsoft_provider_authentication_secret')), and(startsWith(toLower(lambdaVariables('setting').key), 'custom_oidc_'), endsWith(toLower(lambdaVariables('setting').key), '_authentication_secret')))))]",
     "validatedAdditionalAppSettings": "[if(empty(variables('reservedAdditionalAppSettings')), parameters('additionalAppSettings'), fail('additionalAppSettings cannot override reserved Acmebot, AzureWebJobsStorage, or authentication secret settings.'))]",
     "authSettingsV2": "[if(not(variables('authConfigured')), null(), createObject('name', 'authsettingsV2', 'properties', createObject('platform', createObject('enabled', parameters('authSettings').enabled, 'runtimeVersion', '~1'), 'globalValidation', createObject('requireAuthentication', parameters('authSettings').enabled, 'unauthenticatedClientAction', 'RedirectToLoginPage', 'redirectToProvider', if(not(parameters('authSettings').enabled), null(), if(equals(variables('authDefaultProvider'), 'microsoft_entra'), 'azureactivedirectory', variables('authDefaultProvider')))), 'identityProviders', createObject('azureActiveDirectory', if(equals(variables('authMicrosoftEntra'), null()), null(), createObject('enabled', true(), 'registration', createObject('clientId', variables('authMicrosoftEntra').clientId, 'clientSecretSettingName', 'MICROSOFT_PROVIDER_AUTHENTICATION_SECRET', 'openIdIssuer', variables('authMicrosoftEntra').tenantAuthEndpoint))), 'customOpenIdConnectProviders', toObject(items(variables('authCustomProviders')), lambda('provider', lambdaVariables('provider').key), lambda('provider', createObject('enabled', true(), 'registration', createObject('clientId', lambdaVariables('provider').value.clientId, 'clientCredential', createObject('method', 'ClientSecretPost', 'clientSecretSettingName', format('CUSTOM_OIDC_{0}_AUTHENTICATION_SECRET', lambdaVariables('provider').key)), 'openIdConnectConfiguration', createObject('wellKnownOpenIdConfiguration', lambdaVariables('provider').value.wellKnownOpenIdConfiguration)))))), 'login', createObject('tokenStore', createObject('enabled', false())))))]",
+    "functionAppConfigs": "[if(equals(variables('authSettingsV2'), null()), createArray(), createArray(variables('authSettingsV2')))]",
     "storageRoleDefinitionIds": {
       "storageBlobDataOwner": "[format('{0}/providers/Microsoft.Authorization/roleDefinitions/b7e6dc6d-f1e8-4753-8033-0f276bb0955b', variables('subscriptionRootResourceId'))]",
       "storageQueueDataContributor": "[format('{0}/providers/Microsoft.Authorization/roleDefinitions/974c5e8b-45b9-4653-ba55-5f855dd0fb88', variables('subscriptionRootResourceId'))]",
@@ -1513,6 +1515,7 @@
         "remoteBuild": false
       },
       "dependsOn": [
+        "appSettings",
         "functionAppIdentityValidation",
         "site",
         "siteStorageRoleAssignments"
@@ -14787,7 +14790,7 @@
             }
           },
           "configs": {
-            "value": "[concat(createArray(createObject('name', 'appsettings', 'retainCurrentAppSettings', false(), 'properties', union(variables('validatedAdditionalAppSettings'), createObject('APPLICATIONINSIGHTS_CONNECTION_STRING', if(variables('createApplicationInsights'), reference('insights').outputs.connectionString.value, reference('existingApplicationInsights').ConnectionString)), union(createObject('AzureWebJobsStorage__credential', 'managedidentity', 'AzureWebJobsStorage__blobServiceUri', reference('storage').outputs.serviceEndpoints.value.blob, 'AzureWebJobsStorage__queueServiceUri', reference('storage').outputs.serviceEndpoints.value.queue, 'AzureWebJobsStorage__tableServiceUri', reference('storage').outputs.serviceEndpoints.value.table), if(variables('storageUsesUserAssignedIdentity'), createObject('AzureWebJobsStorage__clientId', if(variables('storageUsesUserAssignedIdentity'), reference('uamiLookup').outputs.clientId.value, '')), createObject())), variables('acmebotAppSettings'), variables('authAppSettings')))), if(equals(variables('authSettingsV2'), null()), createArray(), createArray(variables('authSettingsV2'))))]"
+            "value": "[variables('functionAppConfigs')]"
           },
           "diagnosticSettings": "[if(and(parameters('managedDiagnosticSettingsEnabled'), empty(parameters('diagnosticSettings'))), createObject('value', createArray(createObject('workspaceResourceId', if(not(empty(variables('logAnalyticsWorkspaceResourceIdInput'))), variables('logAnalyticsWorkspaceResourceIdInput'), if(variables('createLogAnalyticsWorkspace'), reference('workspace').outputs.resourceId.value, reference('existingApplicationInsights').WorkspaceResourceId))))), createObject('value', parameters('diagnosticSettings')))]",
           "privateEndpoints": {
@@ -29603,10 +29606,8 @@
       },
       "dependsOn": [
         "existingApplicationInsights",
-        "insights",
         "serverfarm",
         "storage",
-        "uamiLookup",
         "workspace"
       ]
     },
@@ -29665,6 +29666,65 @@
           }
         }
       }
+    },
+    "appSettings": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[take(format('acmebot-{0}-app-settings', uniqueString(variables('functionAppResourceId'), parameters('location'))), 64)]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "name": {
+            "value": "[reference('site').outputs.name.value]"
+          },
+          "settings": {
+            "value": "[union(variables('validatedAdditionalAppSettings'), createObject('APPLICATIONINSIGHTS_CONNECTION_STRING', if(variables('createApplicationInsights'), reference('insights').outputs.connectionString.value, reference('existingApplicationInsights').ConnectionString)), union(createObject('AzureWebJobsStorage__credential', 'managedidentity', 'AzureWebJobsStorage__blobServiceUri', reference('storage').outputs.serviceEndpoints.value.blob, 'AzureWebJobsStorage__queueServiceUri', reference('storage').outputs.serviceEndpoints.value.queue, 'AzureWebJobsStorage__tableServiceUri', reference('storage').outputs.serviceEndpoints.value.table), if(variables('storageUsesUserAssignedIdentity'), createObject('AzureWebJobsStorage__clientId', if(variables('storageUsesUserAssignedIdentity'), reference('uamiLookup').outputs.clientId.value, '')), createObject())), variables('acmebotAppSettings'), variables('authAppSettings'))]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.43.8.12551",
+              "templateHash": "16271865581917790174"
+            }
+          },
+          "parameters": {
+            "name": {
+              "type": "string",
+              "metadata": {
+                "description": "The name of the deployed Function App."
+              }
+            },
+            "settings": {
+              "type": "secureObject",
+              "metadata": {
+                "description": "The complete application settings, including workload and authentication secrets."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/sites/config",
+              "apiVersion": "2025-03-01",
+              "name": "[format('{0}/{1}', parameters('name'), 'appsettings')]",
+              "properties": "[parameters('settings')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "existingApplicationInsights",
+        "insights",
+        "site",
+        "storage",
+        "uamiLookup"
+      ]
     },
     "functionAppIdentityValidation": {
       "type": "Microsoft.Resources/deployments",

@@ -921,10 +921,11 @@ var flexFunctionConfig = {
   }
 }
 
+var acmebotAppSettingKeys = map(items(acmebotAppSettings), setting => toLower(setting.key))
 var reservedAdditionalAppSettings = filter(
   items(additionalAppSettings),
   setting =>
-    startsWith(toLower(setting.key), 'acmebot__') || startsWith(toLower(setting.key), 'azurewebjobsstorage') || toLower(setting.key) == 'microsoft_provider_authentication_secret' || (startsWith(
+    contains(acmebotAppSettingKeys, toLower(setting.key)) || startsWith(toLower(setting.key), 'azurewebjobsstorage') || toLower(setting.key) == 'microsoft_provider_authentication_secret' || (startsWith(
       toLower(setting.key),
       'custom_oidc_'
     ) && endsWith(toLower(setting.key), '_authentication_secret'))
@@ -992,16 +993,7 @@ var authSettingsV2 = !authConfigured
       }
     }
 
-var functionAppConfigs = concat(
-  [
-    {
-      name: 'appsettings'
-      retainCurrentAppSettings: false
-      properties: functionAppSettings
-    }
-  ],
-  authSettingsV2 == null ? [] : [authSettingsV2]
-)
+var functionAppConfigs = authSettingsV2 == null ? [] : [authSettingsV2!]
 
 module storage 'br/public:avm/res/storage/storage-account:0.33.1' = {
   name: storageAccountDeploymentName
@@ -1114,6 +1106,14 @@ module uamiLookup 'modules/uami-lookup.bicep' = if (storageUsesUserAssignedIdent
   }
 }
 
+module appSettings 'modules/function-app-settings.bicep' = {
+  name: take('acmebot-${uniqueString(functionAppResourceId, location)}-app-settings', 64)
+  params: {
+    name: site.outputs.name
+    settings: functionAppSettings
+  }
+}
+
 module functionAppIdentityValidation 'modules/function-identity-validation.bicep' = {
   name: take('acmebot-${uniqueString(functionAppResourceId, location)}-identity-check', 64)
   params: {
@@ -1157,6 +1157,7 @@ resource packageDeployment 'Microsoft.Web/sites/extensions@2025-03-01' = if (!sk
   }
   dependsOn: [
     site
+    appSettings
     siteStorageRoleAssignments
     functionAppIdentityValidation
   ]

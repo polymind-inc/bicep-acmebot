@@ -62,6 +62,7 @@ jobs:
         - modules/storage-role-assignments.bicep
         - modules/uami-lookup.bicep
         - modules/function-host-keys.bicep
+        - modules/function-app-settings.bicep
         - modules/function-identity-validation.bicep
         - examples/default/main.bicep
         - examples/complete/main.bicep

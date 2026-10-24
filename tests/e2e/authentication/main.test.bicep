@@ -25,6 +25,9 @@ module authentication '../../../main.bicep' = {
   params: {
     name: take('func-auth-${suffix}', 32)
     acmebot: workload
+    additionalAppSettings: {
+      Acmebot__AzureDns__ManagedIdentityClientId: '33333333-3333-3333-3333-333333333333'
+    }
     publicNetworkAccess: 'Enabled'
     storageAccount: {
       publicNetworkAccess: 'Enabled'
