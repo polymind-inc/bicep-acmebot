@@ -369,7 +369,7 @@ param managedIdentities managedIdentityAllType = {
 @description('Optional. Managed identity used by AzureWebJobsStorage and Flex Consumption deployment storage. When unset, the Function App system-assigned managed identity is used. Required (along with acmebot.managedIdentityClientId) when managedIdentities.systemAssigned is false; the module does not auto-select an attached user-assigned identity.')
 param storageManagedIdentity storageManagedIdentityType = {}
 
-@description('Optional. Resource lock configuration applied to the Function App and inherited by private endpoints unless endpoint inheritance is disabled.')
+@description('Optional. Resource lock applied to the Function App after configuration, package deployment, and host key retrieval. Private endpoints inherit the lock unless overridden.')
 param lock lockType?
 
 @description('Optional. Role assignments for the Function App, using an AVM-aligned roleAssignments shape.')
@@ -1089,7 +1089,7 @@ module site 'br/public:avm/res/web/site:0.24.0' = {
       })
     ]
     roleAssignments: roleAssignments
-    lock: lock
+    lock: null
     tags: resourceTags
     enableTelemetry: enableTelemetry
   }
@@ -1175,6 +1175,25 @@ module functionHostKeys 'modules/function-host-keys.bicep' = {
   }
   dependsOn: [
     packageDeployment
+  ]
+}
+
+// Keep the AVM lock identity, but apply it only after all Function App writes and actions.
+resource functionAppLock 'Microsoft.Authorization/locks@2020-05-01' = if (!empty(lock ?? {}) && lock.?kind != 'None') {
+  scope: functionApp
+  name: lock.?name ?? 'lock-${functionAppName}'
+  properties: {
+    level: lock.?kind ?? ''
+    notes: lock.?notes ?? (lock.?kind == 'CanNotDelete'
+      ? 'Cannot delete resource or child resources.'
+      : 'Cannot delete or modify the resource or child resources.')
+  }
+  dependsOn: [
+    appSettings
+    packageDeployment
+    functionHostKeys
+    functionAppIdentityValidation
+    siteStorageRoleAssignments
   ]
 }
 

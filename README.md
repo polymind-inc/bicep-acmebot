@@ -105,6 +105,10 @@ module acmebot './main.bicep' = {
 - The module-level `lock` applies to the Function App and its private endpoints.
   Storage does not inherit this lock; use each Storage private endpoint's `lock`
   to lock that endpoint explicitly.
+  The Function App lock is applied after application settings, package deployment,
+  and optional host key retrieval, including when `skipPackageDeployment` is true.
+  Existing `ReadOnly` locks must be removed before updating the deployment and
+  are recreated as the final step. The default lock name remains `lock-<app-name>`.
 - Set `privateEndpointsManageDnsZoneGroup: false` when private DNS is managed
   externally. This applies to both Function App and Storage private endpoints.
 - `applicationInsights.create` defaults to whether `resourceId` is absent.

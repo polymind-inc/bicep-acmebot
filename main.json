@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "2994940580659770991"
+      "templateHash": "17455844530530432558"
     },
     "name": "Azure Acmebot",
     "description": "Deploys Azure Acmebot on Azure Functions Flex Consumption using AVM-aligned conventions and published Bicep modules."
@@ -1241,7 +1241,7 @@
       "$ref": "#/definitions/lockType",
       "nullable": true,
       "metadata": {
-        "description": "Optional. Resource lock configuration applied to the Function App and inherited by private endpoints unless endpoint inheritance is disabled."
+        "description": "Optional. Resource lock applied to the Function App after configuration, package deployment, and host key retrieval. Private endpoints inherit the lock unless overridden."
       }
     },
     "roleAssignments": {
@@ -1518,6 +1518,24 @@
         "appSettings",
         "functionAppIdentityValidation",
         "site",
+        "siteStorageRoleAssignments"
+      ]
+    },
+    "functionAppLock": {
+      "condition": "[and(not(empty(coalesce(parameters('lock'), createObject()))), not(equals(tryGet(parameters('lock'), 'kind'), 'None')))]",
+      "type": "Microsoft.Authorization/locks",
+      "apiVersion": "2020-05-01",
+      "scope": "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]",
+      "name": "[coalesce(tryGet(parameters('lock'), 'name'), format('lock-{0}', variables('functionAppName')))]",
+      "properties": {
+        "level": "[coalesce(tryGet(parameters('lock'), 'kind'), '')]",
+        "notes": "[coalesce(tryGet(parameters('lock'), 'notes'), if(equals(tryGet(parameters('lock'), 'kind'), 'CanNotDelete'), 'Cannot delete resource or child resources.', 'Cannot delete or modify the resource or child resources.'))]"
+      },
+      "dependsOn": [
+        "appSettings",
+        "functionAppIdentityValidation",
+        "functionHostKeys",
+        "packageDeployment",
         "siteStorageRoleAssignments"
       ]
     },
@@ -14806,7 +14824,7 @@
             "value": "[parameters('roleAssignments')]"
           },
           "lock": {
-            "value": "[parameters('lock')]"
+            "value": null
           },
           "tags": {
             "value": "[variables('resourceTags')]"

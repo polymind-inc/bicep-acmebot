@@ -49,6 +49,9 @@ module authentication '../../../main.bicep' = {
       }
     }
     exportApiKey: true
+    lock: {
+      kind: 'ReadOnly'
+    }
   }
 }
 
@@ -73,6 +76,11 @@ module infrastructureOnly '../../../main.bicep' = {
       }
     }
     skipPackageDeployment: true
+    lock: {
+      kind: 'ReadOnly'
+      name: 'infrastructure-readonly'
+      notes: 'Lock only after infrastructure configuration finishes.'
+    }
     privateEndpointsManageDnsZoneGroup: false
   }
 }
